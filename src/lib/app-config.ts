@@ -6,6 +6,9 @@ export const DEMO_INCIDENT_ID = "INC-1001";
 /** Marker id prefix for service-metric rows written by the live demo action. */
 export const DEMO_METRIC_PREFIX = "sm-demo-post-";
 
+/** Prefix marking incidents/events created by the live replay injector. */
+export const SIM_PREFIX = "INC-SIM-";
+
 export const APP_NAME = "Relay";
 export const APP_TAGLINE = "Service-management orchestration";
 

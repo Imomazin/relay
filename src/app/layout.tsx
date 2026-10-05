@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Brand, SidebarNav, TopNav } from "@/components/nav";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { APP_NAME } from "@/lib/app-config";
 
 export const metadata: Metadata = {
@@ -43,6 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
 
           <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mb-4 flex items-center justify-end">
+              <NotificationsBell />
+            </div>
             {children}
           </main>
         </div>

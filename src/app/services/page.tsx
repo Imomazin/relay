@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getServices } from "@/lib/queries";
-import { Card, PageHeader, ServiceStatusBadge, CriticalityBadge, HealthBar, DemoDisclaimer } from "@/components/ui";
+import { getServiceDependencyGraph } from "@/lib/queries";
+import { Card, CardBody, PageHeader, SectionTitle, ServiceStatusBadge, CriticalityBadge, HealthBar, DemoDisclaimer } from "@/components/ui";
+import { DependencyGraph } from "@/components/dependency-graph";
 import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export const revalidate = 0;
 export const metadata = { title: "Services" };
 
 export default async function ServicesPage() {
-  const services = await getServices();
+  const { services, deps } = await getServiceDependencyGraph();
 
   return (
     <div>
@@ -17,6 +18,18 @@ export default async function ServicesPage() {
         title="Service Catalogue"
         description="Every synthetic public-service component Relay orchestrates, with ownership, criticality, SLA and live health."
       />
+
+      <SectionTitle hint="hover a node to trace its dependencies">Dependency map</SectionTitle>
+      <Card className="mb-6">
+        <CardBody>
+          <DependencyGraph
+            services={services.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status, criticality: s.criticality }))}
+            edges={deps.map((d) => ({ serviceId: d.serviceId, dependsOnId: d.dependsOnId, kind: d.kind }))}
+          />
+        </CardBody>
+      </Card>
+
+      <SectionTitle>Catalogue</SectionTitle>
       <Card>
         <div className="table-wrap border-0">
           <table className="rtable">

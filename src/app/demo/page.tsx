@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDemoIncident } from "@/lib/queries";
 import { Card, CardBody, PageHeader, SectionTitle, SeverityBadge, IncidentStatusBadge, Chip, DemoDisclaimer, EmptyState } from "@/components/ui";
 import { AutomationActions } from "@/components/automation-actions";
+import { ReplayControls } from "@/components/replay-controls";
 import { DEMO_INCIDENT_ID } from "@/lib/app-config";
 import { formatNumber } from "@/lib/format";
 
@@ -61,6 +62,28 @@ export default async function DemoPage() {
       ) : (
         <EmptyState>The featured demo incident is not present yet. Seed the database (see README) or load a page to trigger auto-provisioning.</EmptyState>
       )}
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardBody>
+            <h3 className="text-sm font-semibold text-white">Event replay</h3>
+            <p className="mt-1 mb-3 text-xs text-slate-400">
+              Generate a brand-new incident live — fresh signals from multiple simulated sources, correlated and
+              triaged by the real engines. Repeatable and safe.
+            </p>
+            <ReplayControls />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <h3 className="text-sm font-semibold text-white">Featured journey</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Or walk the pre-staged flagship incident below: approve the recommended runbook and watch the
+              service recover, then reset to replay for the next audience.
+            </p>
+          </CardBody>
+        </Card>
+      </div>
 
       <SectionTitle>Presenter click-path</SectionTitle>
       <Card><CardBody>

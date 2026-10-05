@@ -11,7 +11,10 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { DEMO_INCIDENT_ID, DEMO_METRIC_PREFIX } from "@/lib/app-config";
+import { DEMO_INCIDENT_ID, DEMO_METRIC_PREFIX, SIM_PREFIX } from "@/lib/app-config";
+import { buildScenario, type ScenarioServiceContext } from "@/lib/engines/scenario";
+import type { RunbookCandidate } from "@/lib/engines/runbook";
+import { EVENT_SOURCE_LABEL, type EventSource, type NormalisedCategory } from "@/lib/domain";
 
 function revalidateAll(incidentId: string) {
   revalidatePath("/");
@@ -134,4 +137,134 @@ export async function resetDemo() {
 
   revalidateAll(incidentId);
   return { ok: true, message: "Demo reset. The Payments incident is awaiting approval again." };
+}
+
+// --- Live event-replay injection --------------------------------------------
+
+/** Curated multi-signal scenarios the presenter can inject on demand. */
+const REPLAY_SCENARIOS: { serviceId: string; category: NormalisedCategory; sources: EventSource[]; severities: string[] }[] = [
+  { serviceId: "svc-payments", category: "saturation", sources: ["cloudwatch", "app_telemetry", "jira_service_desk"], severities: ["alarm", "error", "high"] },
+  { serviceId: "svc-citizen-portal", category: "availability", sources: ["cloudwatch", "app_telemetry", "jira_service_desk"], severities: ["alarm", "error", "high"] },
+  { serviceId: "svc-identity", category: "authentication", sources: ["app_telemetry", "jira_service_desk", "cloudwatch"], severities: ["error", "high", "alarm"] },
+  { serviceId: "svc-api-gateway", category: "latency", sources: ["cloudwatch", "app_telemetry"], severities: ["alarm", "error"] },
+  { serviceId: "svc-document", category: "error_rate", sources: ["app_telemetry", "jira_service_desk"], severities: ["error", "medium"] },
+];
+
+/**
+ * Inject a brand-new incident live by running fresh synthetic signals through
+ * the real pipeline (normalise → correlate → triage → recommend). Demonstrates
+ * event ingestion and incident generation in real time. All injected rows carry
+ * the INC-SIM- prefix and can be cleared with `clearSimulated()`.
+ */
+export async function injectScenario(index?: number) {
+  const scenario = REPLAY_SCENARIOS[(index ?? Math.floor(Math.random() * REPLAY_SCENARIOS.length)) % REPLAY_SCENARIOS.length];
+
+  const [service] = await db.select().from(schema.services).where(eq(schema.services.id, scenario.serviceId)).limit(1);
+  if (!service) return { ok: false, message: "Target service not found (seed the database first)." };
+
+  const [allDeps, runbooks] = await Promise.all([
+    db.select().from(schema.serviceDependencies),
+    db.select().from(schema.runbooks),
+  ]);
+  const dependencyIds = allDeps.filter((d) => d.serviceId === service.id).map((d) => d.dependsOnId);
+  const dependentIds = allDeps.filter((d) => d.dependsOnId === service.id).map((d) => d.serviceId);
+
+  const candidates: RunbookCandidate[] = runbooks.map((r) => ({
+    id: r.id, name: r.name, category: r.category as NormalisedCategory, risk: r.risk as RunbookCandidate["risk"],
+    approvalRequired: r.approvalRequired, applicableCriticalities: r.applicableCriticalities as string[], syntheticSuccessRate: r.syntheticSuccessRate,
+  }));
+
+  const ctx: ScenarioServiceContext = {
+    id: service.id, name: service.name, slug: service.slug, criticality: service.criticality as ScenarioServiceContext["criticality"],
+    ownerTeam: service.ownerTeam, ownerName: service.ownerName, monthlyActiveUsers: service.monthlyActiveUsers || 50000,
+    downstreamCount: dependentIds.length, dependencyIds, dependentIds,
+  };
+
+  const now = new Date();
+  const result = buildScenario({ service: ctx, category: scenario.category, sources: scenario.sources, severities: scenario.severities, now }, candidates);
+
+  const incidentId = `${SIM_PREFIX}${now.getTime().toString(36).toUpperCase()}`;
+  const rbDef = result.recommendation.runbookId ? runbooks.find((r) => r.id === result.recommendation.runbookId) : null;
+
+  await db.insert(schema.incidents).values({
+    id: incidentId,
+    title: `[LIVE] ${service.name} ${result.category} incident`,
+    summary: `Injected via event replay: ${scenario.sources.map((s) => EVENT_SOURCE_LABEL[s]).join(", ")} signals correlated on ${service.name}.`,
+    severity: result.triage.severity,
+    status: result.recommendation.runbookId ? "awaiting_approval" : "triaged",
+    serviceId: service.id,
+    affectedServiceIds: result.affectedServiceIds,
+    affectedUsersEstimate: result.triage.estimatedUserImpact,
+    category: result.category,
+    urgency: result.triage.urgency,
+    serviceImpact: result.triage.serviceImpact,
+    likelyCause: "Live-injected scenario — see correlated events and triage rationale.",
+    confidence: result.triage.confidence,
+    correlationConfidence: result.confidence,
+    correlationReason: result.reason,
+    recommendedRunbookId: result.recommendation.runbookId,
+    recommendedAction: result.recommendation.action,
+    ownerTeam: service.ownerTeam,
+    ownerName: service.ownerName,
+    isMultiSystem: result.isMultiSystem,
+    detectedAt: result.windowStart,
+    acknowledgedAt: now,
+    resolvedAt: null,
+    windowStart: result.windowStart,
+    windowEnd: result.windowEnd,
+    createdAt: result.windowStart,
+  });
+
+  // Correlated events.
+  const eventRows = result.normalised.map((n, i) => ({
+    id: `EVT-SIM-${now.getTime().toString(36)}-${i}`,
+    source: n.source, externalRef: n.externalRef, serviceId: n.serviceId, eventType: n.eventType, severity: n.severity,
+    occurredAt: n.occurredAt, message: n.message, entity: n.entity, metric: n.metric, metricValue: n.metricValue,
+    metricUnit: n.metricUnit, correlationKey: n.correlationKey, normalisedCategory: n.normalisedCategory,
+    rawMetadata: n.rawMetadata, incidentId, createdAt: n.occurredAt,
+  }));
+  await db.insert(schema.events).values(eventRows);
+
+  await db.insert(schema.triageDecisions).values({
+    id: `${incidentId}-triage`, incidentId, severity: result.triage.severity, urgency: result.triage.urgency,
+    serviceImpact: result.triage.serviceImpact, estimatedUserImpact: result.triage.estimatedUserImpact, category: result.category,
+    recommendedOwner: result.triage.recommendedOwner, recommendedRunbookId: result.recommendation.runbookId,
+    confidence: result.triage.confidence, approvalRequired: result.triage.approvalRequired, rationale: result.triage.rationale, createdAt: now,
+  });
+
+  if (rbDef) {
+    const automationId = `${incidentId}-auto-1`;
+    await db.insert(schema.automationExecutions).values({
+      id: automationId, incidentId, runbookId: rbDef.id, status: "awaiting_approval", risk: rbDef.risk,
+      reason: result.recommendation.reason, expectedResult: rbDef.expectedOutcome, approvalRequired: result.recommendation.approvalRequired,
+      requestedBy: "engine:runbook", outcome: null, healthBefore: service.healthScore, healthAfter: null,
+      proposedAt: now, startedAt: null, completedAt: null,
+    });
+    await db.insert(schema.approvals).values({
+      id: `${incidentId}-appr-1`, incidentId, automationId, status: result.recommendation.approvalRequired ? "pending" : "not_required",
+      riskLevel: rbDef.risk, evidence: `${result.normalised.length} correlated signals; ${result.reason}`, expectedResult: rbDef.expectedOutcome,
+      requestedBy: "engine:runbook", approver: null, requestedAt: now, decidedAt: null,
+    });
+  }
+
+  await addAudit([
+    { id: auditId(), at: result.normalised[0].occurredAt, action: "event_received", actor: `adapter:${EVENT_SOURCE_LABEL[result.normalised[0].source]}`, summary: `Live event received for ${service.name}`, incidentId, serviceId: service.id, eventId: eventRows[0].id, runbookId: null, detail: {} },
+    { id: auditId(), at: result.windowEnd, action: "event_correlated", actor: "engine:correlation", summary: `${result.normalised.length} live events correlated (${result.confidence}% confidence)`, incidentId, serviceId: service.id, eventId: null, runbookId: null, detail: { reason: result.reason } },
+    { id: auditId(), at: now, action: "incident_created", actor: "engine:correlation", summary: `Incident ${incidentId} created for ${service.name}`, incidentId, serviceId: service.id, eventId: null, runbookId: null, detail: { severity: result.triage.severity } },
+    { id: auditId(), at: now, action: "triage_performed", actor: "engine:triage", summary: `Triaged as ${result.triage.severity} / ${result.triage.urgency}`, incidentId, serviceId: service.id, eventId: null, runbookId: null, detail: {} },
+    ...(rbDef ? [{ id: auditId(), at: now, action: "runbook_proposed", actor: "engine:runbook", summary: `Recommended runbook: ${rbDef.name}`, incidentId, serviceId: service.id, eventId: null, runbookId: rbDef.id, detail: {} }] : []),
+  ]);
+
+  revalidateAll(incidentId);
+  return { ok: true, incidentId, message: `Live incident ${incidentId} generated on ${service.name} from ${result.normalised.length} correlated signals.` };
+}
+
+/** Remove all live-injected (INC-SIM-) incidents and their rows. */
+export async function clearSimulated() {
+  await db.delete(schema.auditEvents).where(like(schema.auditEvents.incidentId, `${SIM_PREFIX}%`));
+  await db.delete(schema.notifications).where(like(schema.notifications.incidentId, `${SIM_PREFIX}%`));
+  await db.delete(schema.events).where(like(schema.events.incidentId, `${SIM_PREFIX}%`));
+  await db.delete(schema.incidents).where(like(schema.incidents.id, `${SIM_PREFIX}%`));
+  revalidateAll(DEMO_INCIDENT_ID);
+  return { ok: true, message: "Cleared all live-injected incidents." };
 }
