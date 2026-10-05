@@ -63,8 +63,10 @@ export function NotificationsBell() {
         aria-expanded={open}
         aria-label={`Notifications — ${data.openIncidents} open incidents`}
       >
-        <span aria-hidden>🔔</span>
-        <span className="hidden sm:inline">{data.openIncidents} open</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
+        </svg>
+        <span className="hidden tabular-nums sm:inline">{data.openIncidents} open</span>
         {data.items.length > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-severity-critical px-1 text-[10px] font-bold text-white">
             {data.items.length}

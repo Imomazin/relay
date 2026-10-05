@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import {
   INCIDENT_STATUS_LABEL,
   CRITICALITY_LABEL,
+  SERVICE_STATUS_LABEL,
   type IncidentStatus,
   type Severity,
   type ServiceStatus,
@@ -88,7 +89,23 @@ export function ServiceStatusBadge({ status }: { status: string }) {
   return (
     <span className={cn("badge", style)}>
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-      {status}
+      {SERVICE_STATUS_LABEL[status as ServiceStatus] ?? status}
+    </span>
+  );
+}
+
+const SLA_STYLE: Record<string, string> = {
+  ok: "bg-status-healthy/12 text-status-healthy ring-1 ring-inset ring-status-healthy/25",
+  at_risk: "bg-severity-high/12 text-severity-high ring-1 ring-inset ring-severity-high/25",
+  breached: "bg-severity-critical/12 text-severity-critical ring-1 ring-inset ring-severity-critical/25",
+};
+const SLA_LABEL: Record<string, string> = { ok: "On track", at_risk: "At risk", breached: "Breached" };
+
+export function SlaBadge({ state }: { state: string }) {
+  return (
+    <span className={cn("badge", SLA_STYLE[state] ?? SLA_STYLE.ok)}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+      {SLA_LABEL[state] ?? state}
     </span>
   );
 }
@@ -201,11 +218,10 @@ export function TealLink({ href, children }: { href: string; children: ReactNode
 
 export function DemoDisclaimer() {
   return (
-    <div className="mt-8 rounded-lg border border-white/10 bg-navy-900/40 px-4 py-3 text-xs leading-relaxed text-slate-500">
-      <strong className="text-slate-400">Demonstrator notice:</strong> Relay is a product demonstrator. All
-      service telemetry is synthetic and every connector shown is simulated unless explicitly stated otherwise.
-      Automation operates only against demonstration services. Recommendations are decision-support outputs. This
-      does not imply Scottish Government or CivTech endorsement.
-    </div>
+    <p className="mt-8 border-t pt-3 text-[11px] leading-relaxed text-slate-600" style={{ borderColor: "var(--line)" }}>
+      Relay operates on a synthetic service environment for evaluation. Connectors shown are
+      simulated and automation acts only on demonstration services. Not affiliated with, or endorsed
+      by, the Scottish Government or CivTech.
+    </p>
   );
 }

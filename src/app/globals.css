@@ -3,87 +3,184 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --app-bg: #070711;
+  --surface: #0d0c1b;
+  --surface-2: #14132a;
+  --line: rgba(142, 150, 190, 0.14);
+  --line-strong: rgba(142, 150, 190, 0.24);
 }
 
 html,
 body {
-  background-color: #0a0f1c;
-  color: #e2e8f0;
+  background-color: var(--app-bg);
+  color: #e7e9f3;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle control-centre backdrop: two faint light sources, no busy gradient. */
+body {
+  font-family: var(--font-sans);
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(124, 107, 255, 0.10), transparent 60%),
+    radial-gradient(1000px 520px at 100% 0%, rgba(47, 217, 242, 0.07), transparent 55%);
+  background-attachment: fixed;
 }
 
 @layer base {
-  body {
-    font-family: var(--font-sans);
-  }
   * {
-    border-color: rgb(148 163 184 / 0.12);
+    border-color: var(--line);
   }
-  /* Visible focus ring for keyboard users (WCAG 2.2 AA). */
   :focus-visible {
-    outline: 2px solid #2dd4bf;
+    outline: 2px solid #45e3ff;
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 3px;
   }
   a {
     color: inherit;
     text-decoration: none;
   }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+  /* Tabular, aligned numerals for operational data. */
+  .tabular-nums,
+  .metric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
 }
 
 @layer components {
+  /* Surfaces -------------------------------------------------------------- */
   .card {
-    @apply rounded-xl border border-white/10 bg-navy-900/60 backdrop-blur-sm;
+    @apply rounded-lg border bg-[var(--surface)];
+    border-color: var(--line);
   }
   .card-pad {
     @apply p-4 sm:p-5;
   }
+  .panel {
+    @apply rounded-lg border bg-[var(--surface)];
+    border-color: var(--line);
+  }
+
+  /* Eyebrow / section headers -------------------------------------------- */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500;
+  }
+
+  /* Stat / KPI ------------------------------------------------------------ */
   .stat-value {
-    @apply text-2xl font-semibold tracking-tight text-white sm:text-3xl;
+    @apply font-mono text-2xl font-semibold tracking-tight text-white sm:text-[1.7rem];
+    font-variant-numeric: tabular-nums;
   }
   .stat-label {
-    @apply text-xs font-medium uppercase tracking-wide text-slate-400;
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
   }
+
+  /* Badges / pills -------------------------------------------------------- */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
   }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-medium text-slate-300;
+    border-color: var(--line-strong);
+  }
+
+  /* Tables ---------------------------------------------------------------- */
   .table-wrap {
-    @apply overflow-x-auto rounded-xl border border-white/10;
+    @apply overflow-x-auto rounded-lg border;
+    border-color: var(--line);
   }
   .rtable {
-    @apply w-full border-collapse text-left text-sm;
+    @apply w-full border-collapse text-left text-[13px];
   }
   .rtable th {
-    @apply whitespace-nowrap border-b border-white/10 bg-navy-800/60 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400;
+    @apply whitespace-nowrap border-b px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500;
+    border-color: var(--line);
+    background: rgba(255, 255, 255, 0.015);
   }
   .rtable td {
-    @apply border-b border-white/5 px-3 py-2.5 align-top text-slate-200;
+    @apply border-b px-3 py-2.5 align-middle text-slate-200;
+    border-color: rgba(142, 150, 190, 0.08);
   }
-  .rtable tr:hover td {
-    @apply bg-white/[0.03];
+  .rtable tbody tr {
+    @apply transition-colors;
   }
+  .rtable tbody tr:hover td {
+    background: rgba(124, 107, 255, 0.06);
+  }
+
+  /* Links ----------------------------------------------------------------- */
   .link-teal {
-    @apply text-teal-400 underline-offset-2 hover:underline;
+    @apply text-teal-400 underline-offset-2 transition-colors hover:text-teal-400 hover:underline;
   }
+
+  /* Buttons --------------------------------------------------------------- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-teal-500 text-navy-950 hover:bg-teal-400;
+    @apply btn text-navy-950;
+    background: linear-gradient(180deg, #45e3ff, #1ec8e6);
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.25) inset, 0 6px 18px -8px rgba(47, 217, 242, 0.5);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(180deg, #5ce9ff, #27d2ef);
   }
   .btn-ghost {
-    @apply btn border border-white/15 text-slate-200 hover:bg-white/5;
+    @apply btn border text-slate-200;
+    border-color: var(--line-strong);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .btn-sm {
+    @apply px-2.5 py-1 text-[12px];
+  }
+
+  /* Inputs / selects ------------------------------------------------------ */
+  .field {
+    @apply rounded-md border bg-[var(--app-bg)] px-3 py-1.5 text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-teal-500/60;
+    border-color: var(--line-strong);
+  }
+
+  /* Nav ------------------------------------------------------------------- */
+  .nav-item {
+    @apply relative flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100;
+  }
+  .nav-item[aria-current="page"] {
+    @apply bg-white/[0.06] text-white;
+  }
+  .nav-item[aria-current="page"]::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-teal-400;
+  }
+
+  /* Timeline -------------------------------------------------------------- */
+  .timeline {
+    @apply relative space-y-4 border-l pl-5;
+    border-color: var(--line-strong);
+  }
+  .timeline-dot {
+    @apply absolute -left-[25px] top-1 h-2 w-2 rounded-full ring-4;
+    --tw-ring-color: var(--surface);
   }
 }
 
-/* Scrollbar polish */
+/* Scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgb(148 163 184 / 0.25);
+  background: rgba(142, 150, 190, 0.22);
   border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(142, 150, 190, 0.35);
 }

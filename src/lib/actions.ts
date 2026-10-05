@@ -17,14 +17,9 @@ import type { RunbookCandidate } from "@/lib/engines/runbook";
 import { EVENT_SOURCE_LABEL, type EventSource, type NormalisedCategory } from "@/lib/domain";
 
 function revalidateAll(incidentId: string) {
-  revalidatePath("/");
-  revalidatePath("/incidents");
-  revalidatePath(`/incidents/${incidentId}`);
-  revalidatePath("/automations");
-  revalidatePath("/audit");
-  revalidatePath("/capacity");
-  revalidatePath("/services");
-  revalidatePath("/demo");
+  for (const p of ["/", "/incidents", `/incidents/${incidentId}`, "/queue", "/escalations", "/workflow", "/automations", "/audit", "/capacity", "/services", "/demo"]) {
+    revalidatePath(p);
+  }
 }
 
 async function addAudit(rows: (typeof schema.auditEvents.$inferInsert)[]) {
@@ -267,4 +262,81 @@ export async function clearSimulated() {
   await db.delete(schema.incidents).where(like(schema.incidents.id, `${SIM_PREFIX}%`));
   revalidateAll(DEMO_INCIDENT_ID);
   return { ok: true, message: "Cleared all live-injected incidents." };
+}
+
+// --- Operator workflow actions ----------------------------------------------
+// All mutate only Relay's own incident/audit rows.
+
+const OPERATOR = "Operator (demo)";
+
+/** Add a free-text investigation note to an incident's timeline. */
+export async function addNote(incidentId: string, text: string) {
+  const body = text.trim();
+  if (!body) return { ok: false, message: "Note is empty." };
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  await addAudit([{ id: auditId(), at: new Date(), action: "note_added", actor: OPERATOR, summary: body, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: {} }]);
+  revalidateAll(incidentId);
+  return { ok: true, message: "Note added to the timeline." };
+}
+
+/** Reassign the incident owner. */
+export async function assignOwner(incidentId: string, ownerTeam: string, ownerName: string) {
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  await db.update(schema.incidents).set({ ownerTeam, ownerName, status: incident.status === "detected" || incident.status === "triaged" ? "assigned" : incident.status }).where(eq(schema.incidents.id, incidentId));
+  await addAudit([{ id: auditId(), at: new Date(), action: "owner_assigned", actor: OPERATOR, summary: `Reassigned to ${ownerTeam} (${ownerName})`, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: {} }]);
+  revalidateAll(incidentId);
+  return { ok: true, message: `Assigned to ${ownerTeam}.` };
+}
+
+/** Change the incident priority/severity. */
+export async function setPriority(incidentId: string, severity: string) {
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  const urgency = severity === "critical" ? "critical" : severity === "high" ? "high" : severity === "medium" ? "medium" : "low";
+  await db.update(schema.incidents).set({ severity, urgency }).where(eq(schema.incidents.id, incidentId));
+  await addAudit([{ id: auditId(), at: new Date(), action: "priority_changed", actor: OPERATOR, summary: `Priority changed ${incident.severity} → ${severity}`, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: { from: incident.severity, to: severity } }]);
+  revalidateAll(incidentId);
+  return { ok: true, message: `Priority set to ${severity}.` };
+}
+
+/** Set an explicit incident status. */
+export async function setStatus(incidentId: string, status: string) {
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  const now = new Date();
+  const patch: Partial<typeof schema.incidents.$inferInsert> = { status };
+  if (!incident.acknowledgedAt && status !== "detected") patch.acknowledgedAt = now;
+  if (status === "resolved" || status === "closed") patch.resolvedAt = incident.resolvedAt ?? now;
+  if (status !== "resolved" && status !== "closed") patch.resolvedAt = null;
+  await db.update(schema.incidents).set(patch).where(eq(schema.incidents.id, incidentId));
+  await addAudit([
+    { id: auditId(), at: now, action: "incident_status_changed", actor: OPERATOR, summary: `Status ${incident.status} → ${status}`, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: { from: incident.status, to: status } },
+    ...(status === "resolved" ? [{ id: auditId(), at: new Date(now.getTime() + 500), action: "incident_resolved", actor: OPERATOR, summary: `Incident ${incidentId} resolved`, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: {} }] : []),
+  ]);
+  revalidateAll(incidentId);
+  return { ok: true, message: `Status set to ${status}.` };
+}
+
+/** Move the incident one stage forward through the workflow. */
+export async function advanceStage(incidentId: string) {
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  const order = ["detected", "triaged", "assigned", "investigating", "remediating", "monitoring", "resolved", "closed"];
+  const idx = order.indexOf(incident.status);
+  if (idx < 0 || idx >= order.length - 1) return { ok: false, message: "Incident is already closed." };
+  return setStatus(incidentId, order[idx + 1]);
+}
+
+/** Escalate: raise priority to at least high, mark escalated on the timeline. */
+export async function escalate(incidentId: string, reason: string) {
+  const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
+  if (!incident) return { ok: false, message: "Incident not found." };
+  const rank: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+  const raised = rank[incident.severity] >= rank.high ? incident.severity : "high";
+  await db.update(schema.incidents).set({ severity: raised, urgency: raised === "critical" ? "critical" : "high" }).where(eq(schema.incidents.id, incidentId));
+  await addAudit([{ id: auditId(), at: new Date(), action: "escalated", actor: OPERATOR, summary: `Escalated — ${reason.trim() || "operator escalation"}`, incidentId, serviceId: incident.serviceId, eventId: null, runbookId: null, detail: { reason } }]);
+  revalidateAll(incidentId);
+  return { ok: true, message: "Incident escalated." };
 }

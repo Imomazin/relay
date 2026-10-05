@@ -164,6 +164,9 @@ export const AUDIT_ACTIONS = [
   "automation_outcome",
   "incident_status_changed",
   "incident_resolved",
+  "note_added",
+  "priority_changed",
+  "escalated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -179,9 +182,61 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   approval_rejected: "Approval rejected",
   automation_executed: "Automation executed",
   automation_outcome: "Automation outcome recorded",
-  incident_status_changed: "Incident status changed",
+  incident_status_changed: "Status changed",
   incident_resolved: "Incident resolved",
+  note_added: "Note added",
+  priority_changed: "Priority changed",
+  escalated: "Escalated",
 };
 
 export const USER_IMPACT_SCALES = ["low", "moderate", "high", "severe"] as const;
 export type UserImpactScale = (typeof USER_IMPACT_SCALES)[number];
+
+/** Operational labels for the four service states (brief: Healthy→Critical). */
+export const SERVICE_STATUS_LABEL: Record<ServiceStatus, string> = {
+  healthy: "Operational",
+  degraded: "Degraded",
+  impaired: "Major Disruption",
+  down: "Critical Outage",
+};
+
+/**
+ * Workflow lanes for the orchestration board. Each incident status maps to one
+ * lane so an operator can see work progressing Detected → Resolved.
+ */
+export const WORKFLOW_STAGES = ["detected", "triaged", "assigned", "investigating", "remediating", "monitoring", "resolved"] as const;
+export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
+
+export const WORKFLOW_STAGE_LABEL: Record<WorkflowStage, string> = {
+  detected: "Detected",
+  triaged: "Triaged",
+  assigned: "Assigned",
+  investigating: "Investigating",
+  remediating: "Remediating",
+  monitoring: "Monitoring",
+  resolved: "Resolved",
+};
+
+/** Collapse the full incident status set onto a board lane. */
+export function statusToStage(status: IncidentStatus): WorkflowStage {
+  switch (status) {
+    case "detected": return "detected";
+    case "triaged": return "triaged";
+    case "assigned": return "assigned";
+    case "investigating": return "investigating";
+    case "action_proposed":
+    case "awaiting_approval":
+    case "remediating": return "remediating";
+    case "monitoring": return "monitoring";
+    case "resolved":
+    case "closed": return "resolved";
+  }
+}
+
+/** The canonical forward order used by the "advance stage" action. */
+export const INCIDENT_FORWARD_ORDER: IncidentStatus[] = [
+  "detected", "triaged", "assigned", "investigating", "remediating", "monitoring", "resolved", "closed",
+];
+
+export type Priority = "critical" | "high" | "medium" | "low";
+export const PRIORITIES: Priority[] = ["critical", "high", "medium", "low"];

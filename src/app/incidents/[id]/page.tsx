@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncidentById } from "@/lib/queries";
+import { getIncidentById, getOwners } from "@/lib/queries";
 import {
   Card,
   CardBody,
@@ -15,6 +15,7 @@ import {
   DemoDisclaimer,
 } from "@/components/ui";
 import { AutomationActions } from "@/components/automation-actions";
+import { IncidentControls } from "@/components/incident-controls";
 import { formatRelative, formatDateTime, formatNumber, titleCase } from "@/lib/format";
 import {
   EVENT_SOURCE_LABEL,
@@ -37,6 +38,7 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
   const activeAutomation = automations.find((a) => a.status === "proposed" || a.status === "awaiting_approval");
   const pendingApproval = approvals.find((a) => a.status === "pending");
   const isDemo = incident.id === DEMO_INCIDENT_ID;
+  const owners = await getOwners();
 
   return (
     <div>
@@ -66,6 +68,22 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
+          {/* Operator actions */}
+          <div>
+            <SectionTitle hint="changes persist to the timeline">Operator actions</SectionTitle>
+            <Card>
+              <CardBody>
+                <IncidentControls
+                  incidentId={incident.id}
+                  status={incident.status}
+                  severity={incident.severity}
+                  ownerTeam={incident.ownerTeam}
+                  owners={owners}
+                />
+              </CardBody>
+            </Card>
+          </div>
+
           {/* Recommended action + automation */}
           <div>
             <SectionTitle>Recommended action & automation</SectionTitle>

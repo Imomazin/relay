@@ -4,16 +4,19 @@
  * calls `ensureSeeded()` so the demonstrator is self-provisioning.
  */
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { ensureSeeded } from "@/db/ready";
 import * as schema from "@/db/schema";
 import {
   OPEN_INCIDENT_STATUSES,
   SEVERITY_RANK,
+  WORKFLOW_STAGES,
+  statusToStage,
   type Severity,
   type IncidentStatus,
   type NormalisedCategory,
+  type WorkflowStage,
 } from "@/lib/domain";
 import { computeMtt, automationRate } from "@/lib/engines/capacity";
 import { DEMO_INCIDENT_ID } from "@/lib/app-config";
@@ -382,4 +385,167 @@ function toChart(m: Map<string, number>): { label: string; value: number }[] {
 export async function getNotifications() {
   await ready();
   return db.select().from(schema.notifications).orderBy(desc(schema.notifications.at)).limit(10);
+}
+
+// --- SLA helper --------------------------------------------------------------
+export type SlaState = "ok" | "at_risk" | "breached";
+export function slaState(openMinutes: number, targetMinutes: number): SlaState {
+  if (openMinutes >= targetMinutes) return "breached";
+  if (openMinutes >= targetMinutes * 0.8) return "at_risk";
+  return "ok";
+}
+
+export interface QueueRow {
+  id: string;
+  title: string;
+  serviceId: string;
+  serviceName: string;
+  severity: string;
+  status: string;
+  category: string;
+  ownerTeam: string;
+  ownerName: string;
+  ageMinutes: number;
+  slaTargetMinutes: number;
+  slaState: SlaState;
+  affectedUsers: number;
+  nextAction: string;
+}
+
+function nextActionFor(status: string): string {
+  switch (status) {
+    case "detected": return "Triage & assess impact";
+    case "triaged": return "Assign owner";
+    case "assigned": return "Begin investigation";
+    case "investigating": return "Propose remediation";
+    case "action_proposed": return "Request approval";
+    case "awaiting_approval": return "Approve remediation";
+    case "remediating": return "Monitor recovery";
+    case "monitoring": return "Confirm & resolve";
+    default: return "Review";
+  }
+}
+
+async function buildQueueRows(onlyEscalated = false): Promise<QueueRow[]> {
+  const [incidents, services] = await Promise.all([
+    db.select().from(schema.incidents).where(inArray(schema.incidents.status, OPEN_INCIDENT_STATUSES)),
+    db.select().from(schema.services),
+  ]);
+  const svc = new Map(services.map((s) => [s.id, s]));
+  const now = Date.now();
+  let rows: QueueRow[] = incidents.map((i) => {
+    const s = svc.get(i.serviceId);
+    const ageMinutes = Math.max(0, Math.round((now - i.detectedAt.getTime()) / 60000));
+    const target = s?.slaResolveMins ?? 240;
+    return {
+      id: i.id, title: i.title, serviceId: i.serviceId, serviceName: s?.name ?? i.serviceId,
+      severity: i.severity, status: i.status, category: i.category, ownerTeam: i.ownerTeam, ownerName: i.ownerName,
+      ageMinutes, slaTargetMinutes: target, slaState: slaState(ageMinutes, target),
+      affectedUsers: i.affectedUsersEstimate, nextAction: nextActionFor(i.status),
+    };
+  });
+  if (onlyEscalated) rows = rows.filter((r) => SEVERITY_RANK[r.severity as Severity] >= SEVERITY_RANK.high || r.status === "awaiting_approval" || r.slaState !== "ok");
+  // Priority desc, then SLA urgency, then age desc.
+  rows.sort((a, b) => {
+    const sev = SEVERITY_RANK[b.severity as Severity] - SEVERITY_RANK[a.severity as Severity];
+    if (sev !== 0) return sev;
+    const slaRank = { breached: 2, at_risk: 1, ok: 0 } as const;
+    const sla = slaRank[b.slaState] - slaRank[a.slaState];
+    if (sla !== 0) return sla;
+    return b.ageMinutes - a.ageMinutes;
+  });
+  return rows;
+}
+
+export async function getQueue(filter?: { severity?: string; service?: string; sla?: SlaState; status?: string }) {
+  await ready();
+  let rows = await buildQueueRows(false);
+  if (filter?.severity) rows = rows.filter((r) => r.severity === filter.severity);
+  if (filter?.service) rows = rows.filter((r) => r.serviceId === filter.service);
+  if (filter?.sla) rows = rows.filter((r) => r.slaState === filter.sla);
+  if (filter?.status) rows = rows.filter((r) => r.status === filter.status);
+  const services = await db.select({ id: schema.services.id, name: schema.services.name }).from(schema.services).orderBy(asc(schema.services.name));
+  const all = await buildQueueRows(false);
+  return {
+    rows,
+    services,
+    summary: {
+      total: all.length,
+      breached: all.filter((r) => r.slaState === "breached").length,
+      atRisk: all.filter((r) => r.slaState === "at_risk").length,
+      unassigned: all.filter((r) => !r.ownerName).length,
+      critical: all.filter((r) => r.severity === "critical").length,
+    },
+  };
+}
+
+export async function getEscalations() {
+  await ready();
+  const rows = await buildQueueRows(true);
+  // Which incidents were explicitly escalated by an operator.
+  const escalatedAudit = await db
+    .select({ incidentId: schema.auditEvents.incidentId })
+    .from(schema.auditEvents)
+    .where(eq(schema.auditEvents.action, "escalated"));
+  const escalatedIds = new Set(escalatedAudit.map((a) => a.incidentId));
+  return rows.map((r) => ({ ...r, explicitlyEscalated: escalatedIds.has(r.id) }));
+}
+
+export interface BoardCard {
+  id: string; title: string; severity: string; serviceName: string; ownerTeam: string; ageMinutes: number; status: string;
+}
+export async function getWorkflowBoard() {
+  await ready();
+  const [incidents, services] = await Promise.all([
+    db.select().from(schema.incidents).orderBy(desc(schema.incidents.detectedAt)),
+    db.select().from(schema.services),
+  ]);
+  const svc = new Map(services.map((s) => [s.id, s.name]));
+  const now = Date.now();
+  const lanes: Record<WorkflowStage, BoardCard[]> = {} as Record<WorkflowStage, BoardCard[]>;
+  for (const st of WORKFLOW_STAGES) lanes[st] = [];
+  for (const i of incidents) {
+    const stage = statusToStage(i.status as IncidentStatus);
+    lanes[stage].push({
+      id: i.id, title: i.title, severity: i.severity, serviceName: svc.get(i.serviceId) ?? i.serviceId,
+      ownerTeam: i.ownerTeam, ageMinutes: Math.max(0, Math.round((now - i.detectedAt.getTime()) / 60000)), status: i.status,
+    });
+  }
+  // Cap resolved lane for readability.
+  lanes.resolved = lanes.resolved.slice(0, 12);
+  return { lanes };
+}
+
+export async function getOwners() {
+  await ready();
+  const services = await db.select({ ownerTeam: schema.services.ownerTeam, ownerName: schema.services.ownerName }).from(schema.services);
+  const seen = new Set<string>();
+  const owners: { ownerTeam: string; ownerName: string }[] = [];
+  for (const s of services) {
+    const key = `${s.ownerTeam}|${s.ownerName}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      owners.push({ ownerTeam: s.ownerTeam, ownerName: s.ownerName });
+    }
+  }
+  return owners.sort((a, b) => a.ownerTeam.localeCompare(b.ownerTeam));
+}
+
+export async function searchAll(q: string) {
+  await ready();
+  const term = `%${q}%`;
+  const [incidents, services, teams] = await Promise.all([
+    db.select().from(schema.incidents).where(or(ilike(schema.incidents.id, term), ilike(schema.incidents.title, term), ilike(schema.incidents.summary, term), ilike(schema.incidents.category, term))).orderBy(desc(schema.incidents.detectedAt)).limit(20),
+    db.select().from(schema.services).where(or(ilike(schema.services.name, term), ilike(schema.services.slug, term), ilike(schema.services.ownerTeam, term), ilike(schema.services.description, term))).limit(12),
+    db.select({ ownerTeam: schema.services.ownerTeam, ownerName: schema.services.ownerName }).from(schema.services).where(or(ilike(schema.services.ownerTeam, term), ilike(schema.services.ownerName, term))),
+  ]);
+  const svcAll = await db.select({ id: schema.services.id, name: schema.services.name }).from(schema.services);
+  const nameById = new Map(svcAll.map((s) => [s.id, s.name]));
+  const teamSet = new Map<string, string>();
+  for (const t of teams) teamSet.set(t.ownerTeam, t.ownerName);
+  return {
+    incidents: incidents.map((i) => ({ id: i.id, title: i.title, severity: i.severity, status: i.status, serviceName: nameById.get(i.serviceId) ?? i.serviceId })),
+    services,
+    teams: [...teamSet.entries()].map(([ownerTeam, ownerName]) => ({ ownerTeam, ownerName })),
+  };
 }

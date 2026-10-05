@@ -49,3 +49,14 @@ export function formatPercent(n: number | null | undefined, digits = 0): string 
 export function titleCase(s: string): string {
   return s.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** Compact age: "42m", "3h 10m", "2d 4h". */
+export function formatAge(minutes: number | null | undefined): string {
+  if (minutes == null) return "—";
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
