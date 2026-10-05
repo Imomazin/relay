@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCommandCentre } from "@/lib/queries";
+import { getDemoCommandCentre } from "@/lib/demo-data";
 import {
   Card,
   CardBody,
@@ -20,7 +21,18 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CommandCentre() {
-  const m = await getCommandCentre();
+  let m: Awaited<ReturnType<typeof getCommandCentre>>;
+
+  if (!process.env.DATABASE_URL) {
+    m = getDemoCommandCentre();
+  } else {
+    try {
+      m = await getCommandCentre();
+    } catch (error) {
+      console.error("[relay] Database unavailable, using deterministic demo data.", error);
+      m = getDemoCommandCentre();
+    }
+  }
 
   return (
     <div>
@@ -34,7 +46,6 @@ export default async function CommandCentre() {
         }
       />
 
-      {/* Primary KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <StatTile label="Service health" value={`${m.avgHealth}`} sub="mean across services" tone={m.avgHealth >= 85 ? "good" : m.avgHealth >= 65 ? "warn" : "high"} />
         <StatTile label="Open incidents" value={m.openCount} sub={`${m.affectedServices} services affected`} />
@@ -46,7 +57,6 @@ export default async function CommandCentre() {
         <StatTile label="SLA risk" value={m.slaRisk} tone={m.slaRisk ? "warn" : "default"} sub="open past resolve target" />
       </div>
 
-      {/* Secondary KPIs */}
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="MTTA" value={formatDuration(m.mtta)} sub="mean ack" />
         <StatTile label="MTTR" value={formatDuration(m.mttr)} sub="mean resolve" />
@@ -57,7 +67,6 @@ export default async function CommandCentre() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Open incidents */}
         <div className="lg:col-span-2">
           <SectionTitle hint="highest severity first">Priority incidents</SectionTitle>
           <Card>
@@ -126,7 +135,6 @@ export default async function CommandCentre() {
           </div>
         </div>
 
-        {/* Right column */}
         <div className="space-y-6">
           <div>
             <SectionTitle>Service status mix</SectionTitle>
