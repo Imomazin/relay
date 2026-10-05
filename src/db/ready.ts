@@ -2,37 +2,48 @@
  * Runtime self-provisioning guard.
  *
  * On platforms where the app has network access to Neon (e.g. Vercel), the
- * first data read will auto-seed the database if it looks unseeded. This makes
- * the demonstrator work end-to-end from a single environment variable
- * (DATABASE_URL) without a manual seed step. It is a no-op once seeded.
+ * first data read auto-seeds the database when it looks unseeded, and
+ * re-seeds when the synthetic data has gone stale (so SLA clocks, "events in
+ * the last hour" and incident ages always read as a live operation rather than
+ * a frozen snapshot). The deterministic seed regenerates all timestamps
+ * relative to the current time, so a refresh re-bases the whole dataset to now.
  *
- * Assumes the schema/migrations have already been applied (see README).
+ * It is a no-op once seeded and fresh. Assumes schema/migrations are applied.
  */
 import { sql } from "drizzle-orm";
 import { db } from "./client";
 import { applySeed } from "./apply";
 
+/** Re-seed when the newest event is older than this (minutes). */
+const STALE_AFTER_MINUTES = 360; // 6 hours
+
 let readyPromise: Promise<void> | null = null;
 
 async function provision(): Promise<void> {
+  if (process.env.RELAY_DISABLE_AUTOSEED === "1") return;
   try {
-    const result = await db.execute<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM events`,
+    const result = await db.execute<{ count: number; stale_min: number | null }>(
+      sql`SELECT count(*)::int AS count,
+                 extract(epoch FROM (now() - max(occurred_at)))/60 AS stale_min
+          FROM events`,
     );
-    // drizzle neon-http returns { rows }
-    const count = Number((result as any).rows?.[0]?.count ?? 0);
-    if (count >= 100) return; // already seeded
-    if (process.env.RELAY_DISABLE_AUTOSEED === "1") return;
-    console.log(`[relay] Database looks unseeded (events=${count}); seeding...`);
+    const row = (result as { rows?: { count?: number; stale_min?: number | null }[] }).rows?.[0] ?? {};
+    const count = Number(row.count ?? 0);
+    const staleMin = row.stale_min == null ? Infinity : Number(row.stale_min);
+
+    if (count >= 100 && staleMin <= STALE_AFTER_MINUTES) return; // seeded & fresh
+
+    const reason = count < 100 ? `unseeded (events=${count})` : `stale (newest event ${Math.round(staleMin)}m old)`;
+    console.log(`[relay] Database ${reason}; seeding...`);
     await applySeed(db);
-    console.log("[relay] Auto-seed complete.");
+    console.log("[relay] Seed complete.");
   } catch (err) {
-    // If the table does not exist yet, migrations have not been applied.
+    // Table missing → migrations not applied yet; surfaced via the error UI.
     console.error("[relay] Auto-seed skipped:", (err as Error).message);
   }
 }
 
-/** Idempotent, memoised. Safe to call at the top of any data-access function. */
+/** Idempotent, memoised per server instance. Safe at the top of any query. */
 export function ensureSeeded(): Promise<void> {
   if (!readyPromise) readyPromise = provision();
   return readyPromise;
