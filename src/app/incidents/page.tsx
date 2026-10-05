@@ -71,18 +71,18 @@ export default async function IncidentsPage({ searchParams }: { searchParams: SP
                 <tr key={i.id}>
                   <td>
                     <Link href={`/incidents/${i.id}`} className="font-medium text-white hover:text-teal-300">{i.id}</Link>
-                    <div className="max-w-[24rem] truncate text-xs text-slate-400">{i.title}</div>
+                    <div className="max-w-[24rem] truncate text-xs text-slate-400">{i.title ?? "Untitled incident"}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      <Chip>{titleCase(i.category)}</Chip>
+                      <Chip>{titleCase(i.category ?? "other")}</Chip>
                       {i.isMultiSystem ? <Chip className="text-teal-300">multi-signal</Chip> : null}
                     </div>
                   </td>
-                  <td><SeverityBadge severity={i.severity} /></td>
-                  <td><IncidentStatusBadge status={i.status} /></td>
-                  <td className="hidden sm:table-cell text-slate-300">{nameById.get(i.serviceId)}</td>
-                  <td className="hidden lg:table-cell w-40"><ConfidenceBar value={i.correlationConfidence} label="Correlation" /></td>
-                  <td className="hidden md:table-cell tabular-nums text-slate-300">{formatNumber(i.affectedUsersEstimate)}</td>
-                  <td className="hidden sm:table-cell whitespace-nowrap text-xs text-slate-400">{formatRelative(i.detectedAt)}</td>
+                  <td><SeverityBadge severity={i.severity ?? "info"} /></td>
+                  <td><IncidentStatusBadge status={i.status ?? "detected"} /></td>
+                  <td className="hidden sm:table-cell text-slate-300">{nameById.get(i.serviceId ?? "") ?? "—"}</td>
+                  <td className="hidden lg:table-cell w-40"><ConfidenceBar value={i.correlationConfidence ?? 0} label="Correlation" /></td>
+                  <td className="hidden md:table-cell tabular-nums text-slate-300">{formatNumber(i.affectedUsersEstimate ?? 0)}</td>
+                  <td className="hidden sm:table-cell whitespace-nowrap text-xs text-slate-400">{i.detectedAt ? formatRelative(i.detectedAt) : "—"}</td>
                 </tr>
               ))}
             </tbody>
