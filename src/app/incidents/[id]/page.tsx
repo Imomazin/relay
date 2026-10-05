@@ -53,7 +53,7 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
         <IncidentStatusBadge status={incident.status} />
         <Chip>{titleCase(incident.category)}</Chip>
         <Chip>urgency: {incident.urgency}</Chip>
-        {incident.isMultiSystem ? <Chip className="text-teal-300">multi-signal correlation</Chip> : null}
+        {incident.isMultiSystem ? <Chip className="text-teal-400">multi-signal correlation</Chip> : null}
       </div>
 
       <p className="mb-6 max-w-3xl text-sm text-slate-300">{incident.summary}</p>
@@ -113,8 +113,8 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
                     <ol className="space-y-1.5">
                       {runbookSteps.map((s) => (
                         <li key={s.id} className="flex gap-3 text-sm">
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs text-teal-300">{s.ordinal}</span>
-                          <span><span className="text-slate-200">{s.title}</span> <span className="text-slate-500">— {s.description}</span> <code className="ml-1 rounded bg-navy-950 px-1.5 py-0.5 text-[11px] text-teal-300">{s.simulatedAction}</code></span>
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs text-teal-400">{s.ordinal}</span>
+                          <span><span className="text-slate-200">{s.title}</span> <span className="text-slate-500">— {s.description}</span> <code className="ml-1 rounded bg-navy-950 px-1.5 py-0.5 text-[11px] text-teal-400">{s.simulatedAction}</code></span>
                         </li>
                       ))}
                     </ol>
@@ -247,7 +247,7 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
             <Card><CardBody className="space-y-2">
               {(incident.affectedServiceIds as string[]).map((sid, idx) => (
                 <div key={sid} className="flex items-center justify-between text-sm">
-                  <Link href={`/services/${nameById.get(sid)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-300">{nameById.get(sid)?.name ?? sid}</Link>
+                  <Link href={`/services/${nameById.get(sid)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-400">{nameById.get(sid)?.name ?? sid}</Link>
                   <Chip className={idx === 0 ? "text-severity-high" : ""}>{idx === 0 ? "primary" : "downstream"}</Chip>
                 </div>
               ))}
@@ -294,7 +294,7 @@ function KV({ label, value }: { label: string; value: string }) {
 }
 
 function AutomationStatusBadge({ status }: { status: string }) {
-  const tone = status === "succeeded" ? "text-status-healthy" : status === "failed" ? "text-severity-critical" : status === "running" ? "text-teal-300" : "text-severity-high";
+  const tone = status === "succeeded" ? "text-status-healthy" : status === "failed" ? "text-severity-critical" : status === "running" ? "text-teal-400" : "text-severity-high";
   return <span className={`badge ring-1 ring-inset ring-white/10 ${tone}`}>{AUTOMATION_STATUS_LABEL[status as AutomationStatus] ?? status}</span>;
 }
 

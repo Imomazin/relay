@@ -72,7 +72,7 @@ export default async function AutomationsPage() {
                   {(stepsByRunbook.get(r.id) ?? []).map((s) => (
                     <li key={s.id} className="flex gap-2 text-sm text-slate-300">
                       <span className="text-teal-500">{s.ordinal}.</span>
-                      <span>{s.title} <code className="ml-1 rounded bg-navy-950 px-1.5 py-0.5 text-[11px] text-teal-300">{s.simulatedAction}</code></span>
+                      <span>{s.title} <code className="ml-1 rounded bg-navy-950 px-1.5 py-0.5 text-[11px] text-teal-400">{s.simulatedAction}</code></span>
                     </li>
                   ))}
                 </ol>
@@ -91,6 +91,6 @@ export default async function AutomationsPage() {
 }
 
 function AutoBadge({ status }: { status: string }) {
-  const tone = status === "succeeded" ? "text-status-healthy" : status === "failed" ? "text-severity-critical" : status === "running" ? "text-teal-300" : "text-severity-high";
+  const tone = status === "succeeded" ? "text-status-healthy" : status === "failed" ? "text-severity-critical" : status === "running" ? "text-teal-400" : "text-severity-high";
   return <span className={`badge ring-1 ring-inset ring-white/10 ${tone}`}>{AUTOMATION_STATUS_LABEL[status as AutomationStatus] ?? status}</span>;
 }

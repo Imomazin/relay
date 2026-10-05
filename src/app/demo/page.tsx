@@ -42,7 +42,7 @@ export default async function DemoPage() {
                 <span className="font-semibold text-white">{data.incident.id}</span>
                 <SeverityBadge severity={data.incident.severity} />
                 <IncidentStatusBadge status={data.incident.status} />
-                {data.incident.isMultiSystem ? <Chip className="text-teal-300">multi-signal</Chip> : null}
+                {data.incident.isMultiSystem ? <Chip className="text-teal-400">multi-signal</Chip> : null}
               </div>
               <p className="mt-1 text-sm text-slate-300">{data.incident.title}</p>
               <p className="mt-1 text-xs text-slate-500">
@@ -90,7 +90,7 @@ export default async function DemoPage() {
         <ol className="space-y-2">
           {STEPS.map((s, i) => (
             <li key={i} className="flex gap-3 text-sm text-slate-300">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-semibold text-teal-300">{i + 1}</span>
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-semibold text-teal-400">{i + 1}</span>
               <span>{s}</span>
             </li>
           ))}

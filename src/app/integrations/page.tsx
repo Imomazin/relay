@@ -9,7 +9,7 @@ export const revalidate = 0;
 export const metadata = { title: "Integrations" };
 
 const STATUS_TONE: Record<IntegrationStatus, string> = {
-  demo_adapter: "bg-teal-500/15 text-teal-300 ring-teal-500/30",
+  demo_adapter: "bg-teal-500/15 text-teal-400 ring-teal-500/30",
   ready_for_configuration: "bg-severity-medium/15 text-severity-medium ring-severity-medium/30",
   not_connected: "bg-slate-500/15 text-slate-400 ring-slate-500/30",
 };

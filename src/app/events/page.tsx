@@ -33,7 +33,7 @@ export default async function EventsPage({ searchParams }: { searchParams: SP })
       <Card className="mb-4">
         <form method="get" className="flex flex-wrap items-end gap-3 p-4">
           <Field label="Search">
-            <input name="q" defaultValue={sp.q ?? ""} placeholder="message, type, ref…" className="w-48 rounded-lg border border-white/15 bg-navy-950 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600" />
+            <input name="q" defaultValue={sp.q ?? ""} placeholder="message, type, ref…" className="w-48 field placeholder:text-slate-600" />
           </Field>
           <Field label="Source">
             <Select name="source" defaultValue={sp.source ?? ""}>
@@ -112,7 +112,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Select({ name, defaultValue, children }: { name: string; defaultValue: string; children: React.ReactNode }) {
   return (
-    <select name={name} defaultValue={defaultValue} className="rounded-lg border border-white/15 bg-navy-950 px-3 py-1.5 text-sm text-slate-200">
+    <select name={name} defaultValue={defaultValue} className="field">
       {children}
     </select>
   );

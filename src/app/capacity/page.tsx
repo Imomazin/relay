@@ -79,7 +79,7 @@ export default async function CapacityPage() {
                 <CardBody className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-base font-semibold text-white">{s.name}</h3>
-                    {s.isBaseline ? <Chip className="text-teal-300">baseline</Chip> : null}
+                    {s.isBaseline ? <Chip className="text-teal-400">baseline</Chip> : null}
                   </div>
                   <p className="text-sm text-slate-400">{s.description}</p>
                   <div className="space-y-1.5 text-sm">

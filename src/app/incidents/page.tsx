@@ -28,60 +28,62 @@ export default async function IncidentsPage({ searchParams }: { searchParams: SP
       <Card className="mb-4">
         <form method="get" className="flex flex-wrap items-end gap-3 p-4">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
-            <select name="status" defaultValue={sp.status ?? ""} className="rounded-lg border border-white/15 bg-navy-950 px-3 py-1.5 text-sm text-slate-200">
+            <span className="eyebrow">Status</span>
+            <select name="status" defaultValue={sp.status ?? ""} className="field">
               <option value="">All statuses</option>
               {INCIDENT_STATUSES.map((s) => <option key={s} value={s}>{INCIDENT_STATUS_LABEL[s]}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Severity</span>
-            <select name="severity" defaultValue={sp.severity ?? ""} className="rounded-lg border border-white/15 bg-navy-950 px-3 py-1.5 text-sm text-slate-200">
-              <option value="">All severities</option>
+            <span className="eyebrow">Priority</span>
+            <select name="severity" defaultValue={sp.severity ?? ""} className="field">
+              <option value="">All priorities</option>
               {SEVERITIES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 pb-1.5 text-sm text-slate-300">
-            <input type="checkbox" name="open" value="1" defaultChecked={sp.open === "1"} className="h-4 w-4 rounded border-white/20 bg-navy-950" />
+          <label className="flex items-center gap-2 pb-1.5 text-[13px] text-slate-300">
+            <input type="checkbox" name="open" value="1" defaultChecked={sp.open === "1"} className="h-4 w-4 rounded border-white/20 bg-[var(--app-bg)]" />
             Open only
           </label>
-          <button type="submit" className="btn-primary">Apply</button>
-          <Link href="/incidents" className="btn-ghost">Clear</Link>
+          <button type="submit" className="btn-primary btn-sm">Apply</button>
+          <Link href="/incidents" className="btn-ghost btn-sm">Clear</Link>
         </form>
       </Card>
 
-      <p className="mb-2 text-xs text-slate-500">{incidents.length} incidents.</p>
+      <p className="eyebrow mb-2">{incidents.length} incidents</p>
 
       <Card>
         <div className="table-wrap border-0">
           <table className="rtable">
             <thead>
               <tr>
+                <th>Priority</th>
                 <th>Incident</th>
-                <th>Severity</th>
-                <th>Status</th>
                 <th className="hidden sm:table-cell">Service</th>
+                <th className="hidden lg:table-cell">Owner</th>
                 <th className="hidden lg:table-cell">Correlation</th>
                 <th className="hidden md:table-cell">Users</th>
+                <th>Status</th>
                 <th className="hidden sm:table-cell">Detected</th>
               </tr>
             </thead>
             <tbody>
               {incidents.map((i) => (
                 <tr key={i.id}>
+                  <td><SeverityBadge severity={i.severity} /></td>
                   <td>
-                    <Link href={`/incidents/${i.id}`} className="font-medium text-white hover:text-teal-300">{i.id}</Link>
+                    <Link href={`/incidents/${i.id}`} className="font-medium text-white hover:text-teal-400">{i.id}</Link>
                     <div className="max-w-[24rem] truncate text-xs text-slate-400">{i.title}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Chip>{titleCase(i.category)}</Chip>
-                      {i.isMultiSystem ? <Chip className="text-teal-300">multi-signal</Chip> : null}
+                      {i.isMultiSystem ? <Chip className="text-teal-400">multi-signal</Chip> : null}
                     </div>
                   </td>
-                  <td><SeverityBadge severity={i.severity} /></td>
-                  <td><IncidentStatusBadge status={i.status} /></td>
                   <td className="hidden sm:table-cell text-slate-300">{nameById.get(i.serviceId)}</td>
+                  <td className="hidden lg:table-cell text-slate-400">{i.ownerTeam || "—"}</td>
                   <td className="hidden lg:table-cell w-40"><ConfidenceBar value={i.correlationConfidence} label="Correlation" /></td>
-                  <td className="hidden md:table-cell tabular-nums text-slate-300">{formatNumber(i.affectedUsersEstimate)}</td>
+                  <td className="hidden md:table-cell metric text-slate-300">{formatNumber(i.affectedUsersEstimate)}</td>
+                  <td><IncidentStatusBadge status={i.status} /></td>
                   <td className="hidden sm:table-cell whitespace-nowrap text-xs text-slate-400">{formatRelative(i.detectedAt)}</td>
                 </tr>
               ))}

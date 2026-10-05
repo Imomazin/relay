@@ -29,7 +29,7 @@ export function LiveToggle({ intervalMs = 8000 }: { intervalMs?: number }) {
         type="button"
         onClick={() => setLive((v) => !v)}
         aria-pressed={live}
-        className={cn("btn-ghost", live && "border-teal-500/40 text-teal-300")}
+        className={cn("btn-ghost", live && "border-teal-500/40 text-teal-400")}
       >
         <span className={cn("h-2 w-2 rounded-full", live ? "animate-pulse bg-teal-400" : "bg-slate-500")} aria-hidden />
         {live ? "Live" : "Paused"}

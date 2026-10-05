@@ -68,7 +68,7 @@ export default async function ServiceDetail({ params }: { params: Promise<{ slug
                   <tbody>
                     {incidents.map((i) => (
                       <tr key={i.id}>
-                        <td><Link href={`/incidents/${i.id}`} className="font-medium text-white hover:text-teal-300">{i.id}</Link><div className="max-w-[22rem] truncate text-xs text-slate-400">{i.title}</div></td>
+                        <td><Link href={`/incidents/${i.id}`} className="font-medium text-white hover:text-teal-400">{i.id}</Link><div className="max-w-[22rem] truncate text-xs text-slate-400">{i.title}</div></td>
                         <td><SeverityBadge severity={i.severity} /></td>
                         <td><IncidentStatusBadge status={i.status} /></td>
                         <td className="hidden sm:table-cell text-xs text-slate-400">{formatRelative(i.detectedAt)}</td>
@@ -91,7 +91,7 @@ export default async function ServiceDetail({ params }: { params: Promise<{ slug
                 <div className="mt-2 space-y-1.5">
                   {deps.length ? deps.map((d) => (
                     <div key={d.id} className="flex items-center justify-between text-sm">
-                      <Link href={`/services/${nameById.get(d.dependsOnId)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-300">{nameById.get(d.dependsOnId)?.name ?? d.dependsOnId}</Link>
+                      <Link href={`/services/${nameById.get(d.dependsOnId)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-400">{nameById.get(d.dependsOnId)?.name ?? d.dependsOnId}</Link>
                       <Chip className={d.kind === "hard" ? "text-severity-high" : ""}>{d.kind}</Chip>
                     </div>
                   )) : <p className="text-sm text-slate-500">None.</p>}
@@ -102,7 +102,7 @@ export default async function ServiceDetail({ params }: { params: Promise<{ slug
                 <div className="mt-2 space-y-1.5">
                   {dependents.length ? dependents.map((d) => (
                     <div key={d.id} className="flex items-center justify-between text-sm">
-                      <Link href={`/services/${nameById.get(d.serviceId)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-300">{nameById.get(d.serviceId)?.name ?? d.serviceId}</Link>
+                      <Link href={`/services/${nameById.get(d.serviceId)?.slug ?? ""}`} className="text-slate-200 hover:text-teal-400">{nameById.get(d.serviceId)?.name ?? d.serviceId}</Link>
                       <Chip className={d.kind === "hard" ? "text-severity-high" : ""}>{d.kind}</Chip>
                     </div>
                   )) : <p className="text-sm text-slate-500">None.</p>}
@@ -127,7 +127,7 @@ export default async function ServiceDetail({ params }: { params: Promise<{ slug
             <Card><CardBody className="space-y-1.5">
               {runbooks.map((r) => (
                 <div key={r.id} className="flex items-center justify-between text-sm">
-                  <Link href="/automations" className="text-slate-200 hover:text-teal-300">{r.name}</Link>
+                  <Link href="/automations" className="text-slate-200 hover:text-teal-400">{r.name}</Link>
                   <span className="text-xs text-slate-500">{r.risk}</span>
                 </div>
               ))}

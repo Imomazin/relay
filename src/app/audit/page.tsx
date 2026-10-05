@@ -25,7 +25,7 @@ export default async function AuditPage({ searchParams }: { searchParams: SP }) 
         <form method="get" className="flex flex-wrap items-end gap-3 p-4">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Action</span>
-            <select name="action" defaultValue={sp.action ?? ""} className="rounded-lg border border-white/15 bg-navy-950 px-3 py-1.5 text-sm text-slate-200">
+            <select name="action" defaultValue={sp.action ?? ""} className="field">
               <option value="">All actions</option>
               {AUDIT_ACTIONS.map((a) => <option key={a} value={a}>{AUDIT_ACTION_LABEL[a]}</option>)}
             </select>

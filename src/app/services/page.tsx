@@ -48,7 +48,7 @@ export default async function ServicesPage() {
               {services.map((s) => (
                 <tr key={s.id}>
                   <td>
-                    <Link href={`/services/${s.slug}`} className="font-medium text-white hover:text-teal-300">{s.name}</Link>
+                    <Link href={`/services/${s.slug}`} className="font-medium text-white hover:text-teal-400">{s.name}</Link>
                     <div className="max-w-[26rem] text-xs text-slate-400">{s.description}</div>
                   </td>
                   <td><ServiceStatusBadge status={s.status} /></td>
