@@ -147,17 +147,29 @@ npm run test
 
 ## Deploy to Vercel
 
-1. In Vercel, **Add New → Project** and import `Imomazin/relay`.
-2. Set the environment variable **`DATABASE_URL`** to your Neon pooled connection string
-   (Project Settings → Environment Variables). Optionally set `SEED_TOKEN` to enable the guarded
-   `POST /api/seed` re-seed endpoint.
-3. Deploy the `claude/relay-orchestration-build-ci23qf` branch to a **Preview** environment.
-   The app self-seeds on first request.
-4. Health check: `GET /api/health` returns row counts and DB status.
+The app is deploy-ready (`vercel.json`, dynamic rendering, self-provisioning). Two minutes to live:
 
-> Neon and Vercel are connected at the account level (Neon org *"Vercel: eqar-platform"*). Link the
-> Neon project **relay** to the Vercel project so `DATABASE_URL` is injected automatically, or paste
-> it manually.
+1. In Vercel, **Add New → Project** and **Import** `Imomazin/relay`.
+2. Because the demonstrator code lives on the `claude/relay-orchestration-build-ci23qf` branch (not
+   `main`), either:
+   - **Preview (recommended, no merge):** Project → **Settings → Git** and add
+     `claude/relay-orchestration-build-ci23qf` as a deploy branch, then trigger a deployment of it;
+     Vercel posts the **Preview URL** as a check on PR #1. _Or_
+   - **Production:** set that branch as the **Production Branch** in Settings → Git.
+3. Add the environment variable **`DATABASE_URL`** = your Neon **relay** pooled connection string
+   (Settings → Environment Variables, all environments). The Neon database is already migrated and
+   seeded, so the app shows data immediately. Optionally set `SEED_TOKEN` to enable the guarded
+   `POST /api/seed` re-seed endpoint.
+4. Deploy. Verify with `GET /api/health` → returns `{ ok, database: "connected", counts: {…} }`.
+
+> **Why I couldn't deploy it for you:** this build sandbox's egress policy blocks `api.vercel.com`
+> (403) and Neon's host, and no Vercel credentials are available here — so the deployment must be
+> created once from your Vercel account. After that, pushes to the branch auto-deploy and the
+> preview URL appears on the PR.
+
+> Neon and Vercel are already linked at the account level (Neon org *"Vercel: eqar-platform"*). You
+> can link the Neon **relay** project to the Vercel project so `DATABASE_URL` is injected
+> automatically instead of pasting it.
 
 ## Demo
 
