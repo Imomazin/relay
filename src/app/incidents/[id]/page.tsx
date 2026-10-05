@@ -64,9 +64,7 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Main column */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Recommended action + automation */}
           <div>
             <SectionTitle>Recommended action & automation</SectionTitle>
             <Card>
@@ -103,7 +101,6 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
                   </div>
                 ) : null}
 
-                {/* Automation state */}
                 {automations.length ? (
                   <div className="rounded-lg border border-white/10 bg-navy-950/40 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -132,7 +129,6 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
             </Card>
           </div>
 
-          {/* Human approval */}
           {approvals.length ? (
             <div>
               <SectionTitle>Human-in-the-loop approval</SectionTitle>
@@ -155,7 +151,6 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
             </div>
           ) : null}
 
-          {/* Correlated events */}
           <div>
             <SectionTitle hint={`${correlatedEvents.length} events`}>Correlated events</SectionTitle>
             <Card>
@@ -177,7 +172,6 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
             </Card>
           </div>
 
-          {/* Audit trail */}
           <div>
             <SectionTitle hint={`${audit.length} entries`}>Audit trail</SectionTitle>
             <Card><CardBody>
@@ -198,7 +192,6 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
           </div>
         </div>
 
-        {/* Side column */}
         <div className="space-y-6">
           <div>
             <SectionTitle>Likely cause & triage</SectionTitle>
@@ -243,7 +236,7 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
             <SectionTitle>Ownership & timeline</SectionTitle>
             <Card><CardBody className="space-y-2 text-sm">
               <KV label="Owner" value={`${incident.ownerTeam}`} />
-              <KV label="On-call" value={incident.ownerName} />
+              <KV label="On-call" value={incident.ownerName ?? "Unassigned"} />
               <KV label="Detected" value={formatDateTime(incident.detectedAt)} />
               <KV label="Acknowledged" value={incident.acknowledgedAt ? formatDateTime(incident.acknowledgedAt) : "—"} />
               <KV label="Resolved" value={incident.resolvedAt ? formatDateTime(incident.resolvedAt) : "—"} />
