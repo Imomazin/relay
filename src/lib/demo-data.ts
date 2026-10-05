@@ -8,7 +8,6 @@ import {
   type ServiceStatus,
   type Severity,
 } from "@/lib/domain";
-import type { getCommandCentre } from "@/lib/queries";
 
 type DemoService = {
   id: string;
@@ -43,7 +42,7 @@ function average(values: number[]): number | null {
   return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
 }
 
-export function getDemoCommandCentre(): Awaited<ReturnType<typeof getCommandCentre>> {
+export function getDemoCommandCentre() {
   const seed = generateSeed() as unknown as {
     services: DemoService[];
     incidents: DemoIncident[];
@@ -121,5 +120,5 @@ export function getDemoCommandCentre(): Awaited<ReturnType<typeof getCommandCent
       .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
       .slice(0, 6),
     runbookCount: seed.runbooks.length,
-  } as Awaited<ReturnType<typeof getCommandCentre>>;
+  };
 }
