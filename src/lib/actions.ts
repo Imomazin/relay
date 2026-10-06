@@ -14,7 +14,7 @@ import * as schema from "@/db/schema";
 import { DEMO_INCIDENT_ID, DEMO_METRIC_PREFIX, SIM_PREFIX } from "@/lib/app-config";
 import { buildScenario, type ScenarioServiceContext } from "@/lib/engines/scenario";
 import type { RunbookCandidate } from "@/lib/engines/runbook";
-import { EVENT_SOURCE_LABEL, type EventSource, type NormalisedCategory } from "@/lib/domain";
+import { EVENT_SOURCE_LABEL, INCIDENT_STATUSES, type EventSource, type NormalisedCategory } from "@/lib/domain";
 
 function revalidateAll(incidentId: string) {
   for (const p of ["/", "/incidents", `/incidents/${incidentId}`, "/queue", "/escalations", "/workflow", "/automations", "/audit", "/capacity", "/services", "/demo"]) {
@@ -319,13 +319,14 @@ export async function setStatus(incidentId: string, status: string) {
   return { ok: true, message: `Status set to ${status}.` };
 }
 
-/** Move the incident one stage forward through the workflow. */
+/** Move the incident one stage forward through the full lifecycle. */
 export async function advanceStage(incidentId: string) {
   const [incident] = await db.select().from(schema.incidents).where(eq(schema.incidents.id, incidentId)).limit(1);
   if (!incident) return { ok: false, message: "Incident not found." };
-  const order = ["detected", "triaged", "assigned", "investigating", "remediating", "monitoring", "resolved", "closed"];
+  const order = INCIDENT_STATUSES as readonly string[];
   const idx = order.indexOf(incident.status);
-  if (idx < 0 || idx >= order.length - 1) return { ok: false, message: "Incident is already closed." };
+  if (idx < 0) return { ok: false, message: `Unknown status "${incident.status}".` };
+  if (idx >= order.length - 1) return { ok: false, message: "Incident is already closed." };
   return setStatus(incidentId, order[idx + 1]);
 }
 

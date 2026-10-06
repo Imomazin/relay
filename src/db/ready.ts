@@ -18,6 +18,19 @@ import { applySeed } from "./apply";
 const STALE_AFTER_MINUTES = 360; // 6 hours
 
 let readyPromise: Promise<void> | null = null;
+let lastRun = 0;
+/** Re-evaluate the seed/stale check at most this often (ms). */
+const CHECK_INTERVAL_MS = 60_000;
+
+/** Idempotent, time-gated. Safe at the top of any query; re-checks staleness
+ *  periodically on long-lived servers rather than only once per process. */
+export function ensureSeeded(): Promise<void> {
+  const now = Date.now();
+  if (readyPromise && now - lastRun < CHECK_INTERVAL_MS) return readyPromise;
+  lastRun = now;
+  readyPromise = provision();
+  return readyPromise;
+}
 
 async function provision(): Promise<void> {
   if (process.env.RELAY_DISABLE_AUTOSEED === "1") return;
@@ -41,10 +54,4 @@ async function provision(): Promise<void> {
     // Table missing → migrations not applied yet; surfaced via the error UI.
     console.error("[relay] Auto-seed skipped:", (err as Error).message);
   }
-}
-
-/** Idempotent, memoised per server instance. Safe at the top of any query. */
-export function ensureSeeded(): Promise<void> {
-  if (!readyPromise) readyPromise = provision();
-  return readyPromise;
 }

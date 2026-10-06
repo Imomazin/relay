@@ -412,19 +412,22 @@ export function generateSeed(): SeedResult {
     rb.steps.map((st, i) => ({ id: `${rb.id}-step-${i + 1}`, runbookId: rb.id, ordinal: i + 1, title: st.title, description: st.description, simulatedAction: st.simulatedAction })),
   );
 
-  // Service metrics history (14 days, 2/day per service).
+  // Service metrics history (14 days, 2/day per service). RNG is drawn
+  // unconditionally (before the NOW gate) so the deterministic stream — and
+  // therefore everything generated after this — stays reproducible regardless
+  // of the wall-clock time the seed runs.
   const serviceMetrics: SeedResult["serviceMetrics"] = [];
   for (const s of SERVICE_DEFS) {
     for (let d = 14; d >= 0; d--) {
       for (const hour of [9, 18]) {
         const at = new Date(daysAgo(d).getTime());
         at.setHours(hour, 0, 0, 0);
-        if (at.getTime() > NOW.getTime()) continue;
-        serviceMetrics.push({
+        const row = {
           id: `sm-${s.slug}-${d}-${hour}`, serviceId: s.id, capturedAt: at, healthScore: rngInt(rng, 92, 99),
           latencyMs: Math.round(60 + rng() * 180), errorRate: Math.round(rng() * 15) / 10,
           throughput: Math.round(200 + rng() * 2000), saturation: Math.round(30 + rng() * 50),
-        });
+        };
+        if (at.getTime() <= NOW.getTime()) serviceMetrics.push(row);
       }
     }
   }

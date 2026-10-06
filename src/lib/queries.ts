@@ -459,13 +459,13 @@ async function buildQueueRows(onlyEscalated = false): Promise<QueueRow[]> {
 
 export async function getQueue(filter?: { severity?: string; service?: string; sla?: SlaState; status?: string }) {
   await ready();
-  let rows = await buildQueueRows(false);
+  const all = await buildQueueRows(false);
+  let rows = all;
   if (filter?.severity) rows = rows.filter((r) => r.severity === filter.severity);
   if (filter?.service) rows = rows.filter((r) => r.serviceId === filter.service);
   if (filter?.sla) rows = rows.filter((r) => r.slaState === filter.sla);
   if (filter?.status) rows = rows.filter((r) => r.status === filter.status);
   const services = await db.select({ id: schema.services.id, name: schema.services.name }).from(schema.services).orderBy(asc(schema.services.name));
-  const all = await buildQueueRows(false);
   return {
     rows,
     services,
