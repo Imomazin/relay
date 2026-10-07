@@ -180,6 +180,20 @@ export async function getWorkflowBoard() {
   return { lanes };
 }
 
+export async function getOwners() {
+  const d = generateSeed() as any;
+  const services: any[] = d.services ?? [];
+  const seen = new Map<string, { ownerTeam: string; ownerName: string }>();
+  for (const service of services) {
+    const ownerTeam = String(service.ownerTeam ?? "");
+    const ownerName = String(service.ownerName ?? "");
+    if (!ownerTeam) continue;
+    const key = `${ownerTeam}|${ownerName}`;
+    if (!seen.has(key)) seen.set(key, { ownerTeam, ownerName });
+  }
+  return [...seen.values()].sort((a, b) => a.ownerTeam.localeCompare(b.ownerTeam));
+}
+
 export async function searchAll(q: string) {
   const d = generateSeed() as any;
   const incidents: any[] = d.incidents ?? [];
