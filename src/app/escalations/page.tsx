@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getEscalations } from "@/lib/queries";
+import { getEscalations } from "@/lib/operational-queries";
 import { Card, CardBody, PageHeader, StatTile, SeverityBadge, IncidentStatusBadge, SlaBadge, SectionTitle } from "@/components/ui";
 import { formatAge } from "@/lib/format";
 
