@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { searchAll } from "@/lib/queries";
+import { searchAll } from "@/lib/operational-queries";
 import { Card, CardBody, PageHeader, SectionTitle, SeverityBadge, IncidentStatusBadge, EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
