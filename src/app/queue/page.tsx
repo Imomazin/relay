@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getQueue, type SlaState } from "@/lib/queries";
+import { getQueue, type SlaState } from "@/lib/operational-queries";
 import { Card, PageHeader, StatTile, SeverityBadge, IncidentStatusBadge, SlaBadge } from "@/components/ui";
 import { formatAge, titleCase } from "@/lib/format";
 import { SEVERITIES } from "@/lib/domain";
