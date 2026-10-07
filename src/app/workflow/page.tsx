@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getWorkflowBoard } from "@/lib/queries";
+import { getWorkflowBoard } from "@/lib/operational-queries";
 import { PageHeader, SeverityBadge } from "@/components/ui";
 import { WORKFLOW_STAGES, WORKFLOW_STAGE_LABEL, type WorkflowStage } from "@/lib/domain";
 import { formatAge } from "@/lib/format";
