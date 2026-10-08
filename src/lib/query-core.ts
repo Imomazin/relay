@@ -349,6 +349,36 @@ export async function getCommandCentre() {
     total: sql<number>`count(*)::int`,
     succeeded: sql<number>`sum(case when ${schema.automationExecutions.status} = 'succeeded' then 1 else 0 end)::int`,
   }).from(schema.automationExecutions);
+
+  // Event throughput: normalised events per hour over the last 12 hours, as a
+  // left(old)→right(now) series for the command-centre sparkline.
+  const throughputRows = await db.execute<{ hours_ago: number; count: number }>(
+    sql`SELECT floor(extract(epoch FROM (now() - occurred_at)) / 3600)::int AS hours_ago,
+               count(*)::int AS count
+        FROM events
+        WHERE occurred_at >= now() - interval '12 hours'
+        GROUP BY 1`,
+  );
+  const throughputByHour = new Map<number, number>();
+  for (const r of (throughputRows as { rows?: { hours_ago?: number; count?: number }[] }).rows ?? []) {
+    throughputByHour.set(Number(r.hours_ago ?? 0), Number(r.count ?? 0));
+  }
+  const eventThroughput = Array.from({ length: 12 }, (_, i) => throughputByHour.get(11 - i) ?? 0);
+
+  // Recent operational activity: the live audit stream for the command centre.
+  const recentActivity = await db
+    .select({
+      id: schema.auditEvents.id,
+      at: schema.auditEvents.at,
+      action: schema.auditEvents.action,
+      actor: schema.auditEvents.actor,
+      summary: schema.auditEvents.summary,
+      incidentId: schema.auditEvents.incidentId,
+    })
+    .from(schema.auditEvents)
+    .orderBy(desc(schema.auditEvents.at))
+    .limit(8);
+
   const open = incidents.filter((i) => OPEN_INCIDENT_STATUSES.includes(i.status as IncidentStatus));
   const critical = open.filter((i) => i.severity === "critical");
   const high = open.filter((i) => i.severity === "high");
@@ -372,6 +402,8 @@ export async function getCommandCentre() {
     criticalCount: critical.length,
     highCount: high.length,
     eventsLastHour: recentEventCount?.count ?? 0,
+    eventThroughput,
+    recentActivity,
     correlatedClusters: incidents.filter((i) => i.isMultiSystem).length,
     automationRate: automationRate(automationAgg?.succeeded ?? 0, automationAgg?.total ?? 0),
     automatedResolutions: automationAgg?.succeeded ?? 0,
