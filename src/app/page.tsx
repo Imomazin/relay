@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getCommandCentre, getQueue } from "@/lib/queries";
+import { getCommandCentre, getQueue, getOperationsTape } from "@/lib/queries";
+import { OperationsTape } from "@/components/operations-tape";
 import {
   Card,
   CardBody,
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CommandCentre() {
-  const [m, queue] = await Promise.all([getCommandCentre(), getQueue()]);
+  const [m, queue, tape] = await Promise.all([getCommandCentre(), getQueue(), getOperationsTape(22)]);
   const awaitingApproval = m.topOpenIncidents.filter((i) => i.status === "awaiting_approval").length;
 
   const attention = [
@@ -126,6 +127,8 @@ export default async function CommandCentre() {
 
         {/* Right rail */}
         <div className="space-y-6">
+          <OperationsTape items={tape} />
+
           <div>
             <h2 className="eyebrow mb-3">Event throughput</h2>
             <Card><CardBody>
