@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncidentById, getOwners } from "@/lib/queries";
+import { getIncidentById, getOwners, getIncidentChangeContext } from "@/lib/queries";
 import {
   Card,
   CardBody,
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { AutomationActions } from "@/components/automation-actions";
 import { IncidentControls } from "@/components/incident-controls";
-import { formatRelative, formatDateTime, formatNumber, titleCase } from "@/lib/format";
+import { formatRelative, formatDateTime, formatNumber, formatAge, titleCase } from "@/lib/format";
 import {
   EVENT_SOURCE_LABEL,
   AUDIT_ACTION_LABEL,
@@ -36,9 +36,20 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
   const { incident, correlatedEvents, triage, automations, approvals, audit, nameById, recommendedRunbook, runbookSteps, dependents } = data;
 
   const activeAutomation = automations.find((a) => a.status === "proposed" || a.status === "awaiting_approval");
-  const pendingApproval = approvals.find((a) => a.status === "pending");
   const isDemo = incident.id === DEMO_INCIDENT_ID;
-  const owners = await getOwners();
+  const [owners, changeContext] = await Promise.all([getOwners(), getIncidentChangeContext(id)]);
+
+  // SLA / elapsed computation for the dossier strip.
+  const svc = nameById.get(incident.serviceId);
+  const target = svc?.slaResolveMins ?? 240;
+  const endMs = incident.resolvedAt ? new Date(incident.resolvedAt).getTime() : Date.now();
+  const elapsedMins = Math.max(0, Math.round((endMs - new Date(incident.detectedAt).getTime()) / 60000));
+  const slaPct = Math.round((elapsedMins / target) * 100);
+  const slaState = incident.resolvedAt
+    ? (elapsedMins > target ? "breached" : "met")
+    : (elapsedMins > target ? "breached" : slaPct >= 75 ? "at_risk" : "on_track");
+  const slaTone = slaState === "breached" ? "text-severity-critical" : slaState === "at_risk" ? "text-severity-high" : slaState === "met" ? "text-status-healthy" : "text-white";
+  const slaLabel = { breached: "SLA breached", at_risk: "Approaching SLA", on_track: "Within SLA", met: "Resolved within SLA" }[slaState];
 
   return (
     <div>
@@ -57,6 +68,23 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
       </div>
 
       <p className="mb-6 max-w-3xl text-sm text-slate-300">{incident.summary}</p>
+
+      {/* Dossier strip */}
+      <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border sm:grid-cols-3 lg:grid-cols-6" style={{ borderColor: "var(--line)", background: "var(--line)" }}>
+        <Dossier label="Service" value={svc?.name ?? incident.serviceId} />
+        <Dossier label="Elapsed" value={formatAge(elapsedMins)} />
+        <Dossier label="SLA resolve target" value={`${target}m`} />
+        <Dossier label={slaLabel} value={`${slaPct}%`} tone={slaTone} />
+        <Dossier label="On-call" value={incident.ownerName} />
+        <Dossier label="Owner team" value={incident.ownerTeam} />
+      </div>
+
+      {/* SLA progress bar */}
+      <div className="mb-6">
+        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--line)" }} role="meter" aria-valuenow={Math.min(100, slaPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`SLA consumption ${slaPct}%`}>
+          <div className={`h-full rounded-full ${slaState === "breached" ? "bg-severity-critical" : slaState === "at_risk" ? "bg-severity-high" : "bg-teal-500"}`} style={{ width: `${Math.min(100, slaPct)}%` }} />
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Affected users (est.)" value={formatNumber(incident.affectedUsersEstimate)} />
@@ -243,6 +271,32 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
           </div>
 
           <div>
+            <SectionTitle hint="2h before detection">Change correlation</SectionTitle>
+            <Card><CardBody className="space-y-2.5">
+              {changeContext.deployments.length === 0 ? (
+                <p className="text-sm text-slate-500">No deployment to {svc?.name ?? "this service"} in the 2 hours before detection.</p>
+              ) : (
+                changeContext.deployments.slice(0, 4).map((d) => {
+                  const minsBefore = changeContext.detectedAt ? Math.round((new Date(changeContext.detectedAt).getTime() - d.deployedAt.getTime()) / 60000) : null;
+                  return (
+                    <div key={d.id} className="rounded-md border p-2.5" style={{ borderColor: "var(--line)" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="metric text-sm text-white">{d.commitSha}</span>
+                        <span className={`metric text-xs ${d.status === "rolled_back" ? "text-severity-critical" : d.status === "failed" ? "text-severity-high" : "text-status-healthy"}`}>{d.status.replace("_", " ")}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {minsBefore != null ? <span className="text-white">{minsBefore} min before · </span> : null}
+                        {d.system} → {d.environment}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{d.repo} · PR #{d.pullRequest} · {d.author}</p>
+                    </div>
+                  );
+                })
+              )}
+            </CardBody></Card>
+          </div>
+
+          <div>
             <SectionTitle>Affected services (blast radius)</SectionTitle>
             <Card><CardBody className="space-y-2">
               {(incident.affectedServiceIds as string[]).map((sid, idx) => (
@@ -271,6 +325,15 @@ export default async function IncidentWorkspace({ params }: { params: Promise<{ 
         </div>
       </div>
       <DemoDisclaimer />
+    </div>
+  );
+}
+
+function Dossier({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="bg-[var(--surface)] p-3">
+      <div className="stat-label">{label}</div>
+      <div className={`mt-1 truncate text-sm font-semibold ${tone ?? "text-white"}`} title={value}>{value}</div>
     </div>
   );
 }

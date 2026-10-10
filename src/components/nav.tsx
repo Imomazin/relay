@@ -23,6 +23,7 @@ const GROUPS: NavGroup[] = [
     heading: "Services",
     items: [
       { href: "/services", label: "Services", icon: "stack" },
+      { href: "/topology", label: "Topology", icon: "flow" },
       { href: "/capacity", label: "Capacity & SLA", icon: "chart" },
     ],
   },

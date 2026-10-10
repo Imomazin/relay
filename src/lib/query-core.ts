@@ -550,3 +550,83 @@ export async function getOperationsTape(limit = 20): Promise<TapeItem[]> {
 
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit);
 }
+
+// --- Topology ----------------------------------------------------------------
+export interface TopologyNode {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  healthScore: number;
+  criticality: string;
+  ownerTeam: string;
+  slaResolveMins: number;
+  openIncidents: number;
+  topSeverity: string | null;
+  lastDeployAt: Date | null;
+  lastDeploySystem: string | null;
+}
+export interface TopologyEdge { serviceId: string; dependsOnId: string; kind: string }
+
+export async function getTopology(): Promise<{ nodes: TopologyNode[]; edges: TopologyEdge[] }> {
+  let services: { id: string; name: string; slug: string; status: string; healthScore: number; criticality: string; ownerTeam: string; slaResolveMins: number }[];
+  let deps: { serviceId: string; dependsOnId: string; kind: string }[];
+  let incidents: { id: string; serviceId: string; detectedAt: Date; severity: string; status: string; title: string }[];
+
+  if (demoMode()) {
+    const d = demo();
+    services = d.services.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status, healthScore: s.healthScore, criticality: s.criticality, ownerTeam: s.ownerTeam, slaResolveMins: s.slaResolveMins }));
+    deps = d.serviceDependencies.map((e) => ({ serviceId: e.serviceId, dependsOnId: e.dependsOnId, kind: e.kind }));
+    incidents = d.incidents.map((i) => ({ id: i.id, serviceId: i.serviceId, detectedAt: new Date(i.detectedAt), severity: i.severity, status: i.status, title: i.title }));
+  } else {
+    await ready();
+    const [svc, dep, inc] = await Promise.all([
+      db.select({ id: schema.services.id, name: schema.services.name, slug: schema.services.slug, status: schema.services.status, healthScore: schema.services.healthScore, criticality: schema.services.criticality, ownerTeam: schema.services.ownerTeam, slaResolveMins: schema.services.slaResolveMins }).from(schema.services),
+      db.select({ serviceId: schema.serviceDependencies.serviceId, dependsOnId: schema.serviceDependencies.dependsOnId, kind: schema.serviceDependencies.kind }).from(schema.serviceDependencies),
+      db.select({ id: schema.incidents.id, serviceId: schema.incidents.serviceId, detectedAt: schema.incidents.detectedAt, severity: schema.incidents.severity, status: schema.incidents.status, title: schema.incidents.title }).from(schema.incidents),
+    ]);
+    services = svc;
+    deps = dep;
+    incidents = inc.map((i) => ({ id: i.id, serviceId: i.serviceId ?? "", detectedAt: i.detectedAt, severity: i.severity ?? "info", status: i.status ?? "detected", title: i.title ?? "" }));
+  }
+
+  const open = incidents.filter((i) => OPEN_INCIDENT_STATUSES.includes(i.status as IncidentStatus));
+  const openByService = new Map<string, { count: number; top: string | null }>();
+  for (const i of open) {
+    const cur = openByService.get(i.serviceId) ?? { count: 0, top: null };
+    cur.count += 1;
+    if (!cur.top || SEVERITY_RANK[i.severity as Severity] > SEVERITY_RANK[cur.top as Severity]) cur.top = i.severity;
+    openByService.set(i.serviceId, cur);
+  }
+
+  const deployments = generateDeployments(services, incidents, Date.now());
+  const latestDeploy = new Map<string, { at: Date; system: string }>();
+  for (const dpl of deployments) {
+    if (!latestDeploy.has(dpl.serviceId)) latestDeploy.set(dpl.serviceId, { at: dpl.deployedAt, system: dpl.system });
+  }
+
+  const nodes: TopologyNode[] = services.map((s) => {
+    const o = openByService.get(s.id);
+    const dpl = latestDeploy.get(s.id);
+    return {
+      id: s.id, name: s.name, slug: s.slug, status: s.status, healthScore: s.healthScore,
+      criticality: s.criticality, ownerTeam: s.ownerTeam, slaResolveMins: s.slaResolveMins,
+      openIncidents: o?.count ?? 0, topSeverity: o?.top ?? null,
+      lastDeployAt: dpl?.at ?? null, lastDeploySystem: dpl?.system ?? null,
+    };
+  });
+
+  return { nodes, edges: deps };
+}
+
+// --- Incident change context -------------------------------------------------
+export async function getIncidentChangeContext(id: string) {
+  const { services, incidents } = await changeInputs();
+  const inc = incidents.find((i) => i.id === id);
+  if (!inc) return { deployments: [] as ReturnType<typeof generateDeployments>, detectedAt: null as Date | null };
+  const windowMs = 120 * 60000;
+  const deployments = generateDeployments(services, incidents, Date.now())
+    .filter((d) => d.serviceId === inc.serviceId && d.deployedAt.getTime() <= inc.detectedAt.getTime() && inc.detectedAt.getTime() - d.deployedAt.getTime() <= windowMs)
+    .sort((a, b) => b.deployedAt.getTime() - a.deployedAt.getTime());
+  return { deployments, detectedAt: inc.detectedAt };
+}
