@@ -23,6 +23,7 @@ const GROUPS: NavGroup[] = [
     heading: "Services",
     items: [
       { href: "/services", label: "Services", icon: "stack" },
+      { href: "/topology", label: "Topology", icon: "flow" },
       { href: "/capacity", label: "Capacity & SLA", icon: "chart" },
     ],
   },
@@ -30,6 +31,7 @@ const GROUPS: NavGroup[] = [
     heading: "Signals",
     items: [
       { href: "/events", label: "Event Stream", icon: "pulse" },
+      { href: "/changes", label: "Change Intelligence", icon: "git" },
       { href: "/automations", label: "Automations", icon: "bolt" },
       { href: "/integrations", label: "Integrations", icon: "plug" },
       { href: "/audit", label: "Audit", icon: "shield" },
@@ -159,7 +161,7 @@ export function LiveClock() {
 // --- Icons (inline, stroke, currentColor) ----------------------------------
 type IconKey =
   | "grid" | "alert" | "queue" | "flag" | "flow" | "stack" | "chart"
-  | "pulse" | "bolt" | "plug" | "shield" | "book" | "play" | "info" | "search";
+  | "pulse" | "bolt" | "plug" | "shield" | "book" | "play" | "info" | "search" | "git";
 
 const PATHS: Record<IconKey, string> = {
   grid: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
@@ -177,6 +179,7 @@ const PATHS: Record<IconKey, string> = {
   play: "M8 5v14l11-7z",
   info: "M12 16v-5m0-4h.01M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z",
   search: "M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z",
+  git: "M6 3v12m0 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 0c0 4-3 5-6 5",
 };
 
 function Icon({ name }: { name: IconKey }) {

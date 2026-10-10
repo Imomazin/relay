@@ -36,6 +36,7 @@ type DemoIncident = {
 type DemoEvent = { occurredAt: Date };
 type DemoAutomation = { status: string };
 type DemoCapacity = { isForecast: boolean; supportWorkloadHours: number; periodStart: Date };
+type DemoAudit = { id: string; at: Date; action: string; actor: string; summary: string; incidentId: string | null };
 
 function average(values: number[]): number | null {
   if (!values.length) return null;
@@ -49,6 +50,7 @@ export function getDemoCommandCentre() {
     events: DemoEvent[];
     automationExecutions: DemoAutomation[];
     capacityForecasts: DemoCapacity[];
+    auditEvents: DemoAudit[];
     runbooks: unknown[];
   };
 
@@ -96,6 +98,18 @@ export function getDemoCommandCentre() {
   const succeeded = seed.automationExecutions.filter((a) => a.status === "succeeded").length;
   const automationTotal = seed.automationExecutions.length;
 
+  const throughputByHour = new Map<number, number>();
+  for (const event of seed.events) {
+    const hoursAgo = Math.floor((now - new Date(event.occurredAt).getTime()) / 3600000);
+    if (hoursAgo >= 0 && hoursAgo < 12) throughputByHour.set(hoursAgo, (throughputByHour.get(hoursAgo) ?? 0) + 1);
+  }
+  const eventThroughput = Array.from({ length: 12 }, (_, i) => throughputByHour.get(11 - i) ?? 0);
+
+  const recentActivity = [...seed.auditEvents]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, 8)
+    .map((a) => ({ id: a.id, at: new Date(a.at), action: a.action, actor: a.actor, summary: a.summary, incidentId: a.incidentId ?? null }));
+
   return {
     services,
     nameById,
@@ -105,6 +119,8 @@ export function getDemoCommandCentre() {
     criticalCount: critical.length,
     highCount: high.length,
     eventsLastHour: seed.events.filter((event) => now - new Date(event.occurredAt).getTime() <= 3600000).length,
+    eventThroughput,
+    recentActivity,
     correlatedClusters: incidents.filter((incident) => incident.isMultiSystem).length,
     automationRate: automationTotal ? Math.round((succeeded / automationTotal) * 100) : 0,
     automatedResolutions: succeeded,

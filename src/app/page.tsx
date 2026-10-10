@@ -1,26 +1,27 @@
 import Link from "next/link";
-import { getCommandCentre, getQueue } from "@/lib/queries";
+import { getCommandCentre, getQueue, getOperationsTape } from "@/lib/queries";
+import { OperationsTape } from "@/components/operations-tape";
 import {
   Card,
   CardBody,
   PageHeader,
   StatTile,
-  SectionTitle,
   SeverityBadge,
   IncidentStatusBadge,
   ServiceStatusBadge,
   SlaBadge,
   HealthBar,
+  Sparkbars,
   DemoDisclaimer,
 } from "@/components/ui";
-import { formatDuration, formatNumber, formatAge, titleCase } from "@/lib/format";
-import { type ServiceStatus } from "@/lib/domain";
+import { formatDuration, formatNumber, formatAge, formatRelative, titleCase } from "@/lib/format";
+import { AUDIT_ACTION_LABEL, type AuditAction, type ServiceStatus } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CommandCentre() {
-  const [m, queue] = await Promise.all([getCommandCentre(), getQueue()]);
+  const [m, queue, tape] = await Promise.all([getCommandCentre(), getQueue(), getOperationsTape(22)]);
   const awaitingApproval = m.topOpenIncidents.filter((i) => i.status === "awaiting_approval").length;
 
   const attention = [
@@ -126,6 +127,25 @@ export default async function CommandCentre() {
 
         {/* Right rail */}
         <div className="space-y-6">
+          <OperationsTape items={tape} />
+
+          <div>
+            <h2 className="eyebrow mb-3">Event throughput</h2>
+            <Card><CardBody>
+              <div className="flex items-baseline justify-between">
+                <span className="stat-value text-white">{formatNumber(m.eventsLastHour)}</span>
+                <span className="text-[12px] text-slate-500">events this hour</span>
+              </div>
+              <div className="mt-3">
+                <Sparkbars values={m.eventThroughput} ariaLabel={`Normalised events per hour over the last 12 hours: ${m.eventThroughput.join(", ")}`} />
+              </div>
+              <div className="mt-1.5 flex justify-between text-[11px] text-slate-500">
+                <span>−12h</span>
+                <span>now</span>
+              </div>
+            </CardBody></Card>
+          </div>
+
           <div>
             <h2 className="eyebrow mb-3">Service posture</h2>
             <Card><CardBody className="space-y-2.5">
@@ -160,6 +180,40 @@ export default async function CommandCentre() {
               <Link href="/capacity" className="mt-1 block text-[12px] text-teal-400 hover:underline">Capacity &amp; SLA →</Link>
             </CardBody></Card>
           </div>
+
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="eyebrow">Operational activity</h2>
+              <Link href="/audit" className="text-[12px] text-teal-400 hover:underline">Audit trail →</Link>
+            </div>
+            <Card><CardBody className="space-y-0 p-0">
+              <ol className="divide-y" style={{ borderColor: "var(--line)" }}>
+                {m.recentActivity.map((a) => {
+                  const label = AUDIT_ACTION_LABEL[a.action as AuditAction] ?? titleCase(a.action);
+                  const body = (
+                    <div className="flex items-start gap-2.5 px-4 py-2.5">
+                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ACTIVITY_DOT[a.action] ?? "bg-slate-600"}`} aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[13px] text-slate-200">{label}</span>
+                          <span className="metric shrink-0 text-[11px] text-slate-500">{formatRelative(a.at)}</span>
+                        </div>
+                        <p className="truncate text-[12px] text-slate-500">{a.summary}</p>
+                      </div>
+                    </div>
+                  );
+                  return (
+                    <li key={a.id}>
+                      {a.incidentId ? (
+                        <Link href={`/incidents/${a.incidentId}`} className="block transition-colors hover:bg-white/[0.03]">{body}</Link>
+                      ) : body}
+                    </li>
+                  );
+                })}
+                {m.recentActivity.length === 0 ? <li className="px-4 py-6 text-center text-sm text-slate-500">No recent activity.</li> : null}
+              </ol>
+            </CardBody></Card>
+          </div>
         </div>
       </div>
 
@@ -177,6 +231,19 @@ const ATTENTION_DOT: Record<string, string> = {
   critical: "bg-severity-critical",
   warn: "bg-severity-high",
   accent: "bg-teal-400",
+};
+
+const ACTIVITY_DOT: Record<string, string> = {
+  incident_created: "bg-severity-critical",
+  escalated: "bg-severity-critical",
+  triage_performed: "bg-severity-high",
+  approval_requested: "bg-severity-medium",
+  approval_granted: "bg-teal-400",
+  automation_executed: "bg-teal-400",
+  automation_outcome: "bg-teal-400",
+  incident_resolved: "bg-status-healthy",
+  event_correlated: "bg-brand-400",
+  owner_assigned: "bg-brand-400",
 };
 
 function Row({ label, value }: { label: string; value: string }) {
