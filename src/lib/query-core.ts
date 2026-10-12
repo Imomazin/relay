@@ -16,6 +16,8 @@ import {
   type NormalisedCategory,
 } from "@/lib/domain";
 import { computeMtt, automationRate } from "@/lib/engines/capacity";
+import { correlateChanges, computeChangeMetrics } from "@/lib/engines/change";
+import { generateDeployments } from "@/integrations/changes";
 import { DEMO_INCIDENT_ID } from "@/lib/app-config";
 import { getDemoCommandCentre } from "@/lib/demo-data";
 
@@ -348,7 +350,38 @@ export async function getCommandCentre() {
   const [automationAgg] = await db.select({
     total: sql<number>`count(*)::int`,
     succeeded: sql<number>`sum(case when ${schema.automationExecutions.status} = 'succeeded' then 1 else 0 end)::int`,
+    running: sql<number>`sum(case when ${schema.automationExecutions.status} in ('proposed','awaiting_approval','running') then 1 else 0 end)::int`,
   }).from(schema.automationExecutions);
+
+  // Event throughput: normalised events per hour over the last 12 hours, as a
+  // left(old)→right(now) series for the command-centre sparkline.
+  const throughputRows = await db.execute<{ hours_ago: number; count: number }>(
+    sql`SELECT floor(extract(epoch FROM (now() - occurred_at)) / 3600)::int AS hours_ago,
+               count(*)::int AS count
+        FROM events
+        WHERE occurred_at >= now() - interval '12 hours'
+        GROUP BY 1`,
+  );
+  const throughputByHour = new Map<number, number>();
+  for (const r of (throughputRows as { rows?: { hours_ago?: number; count?: number }[] }).rows ?? []) {
+    throughputByHour.set(Number(r.hours_ago ?? 0), Number(r.count ?? 0));
+  }
+  const eventThroughput = Array.from({ length: 12 }, (_, i) => throughputByHour.get(11 - i) ?? 0);
+
+  // Recent operational activity: the live audit stream for the command centre.
+  const recentActivity = await db
+    .select({
+      id: schema.auditEvents.id,
+      at: schema.auditEvents.at,
+      action: schema.auditEvents.action,
+      actor: schema.auditEvents.actor,
+      summary: schema.auditEvents.summary,
+      incidentId: schema.auditEvents.incidentId,
+    })
+    .from(schema.auditEvents)
+    .orderBy(desc(schema.auditEvents.at))
+    .limit(8);
+
   const open = incidents.filter((i) => OPEN_INCIDENT_STATUSES.includes(i.status as IncidentStatus));
   const critical = open.filter((i) => i.severity === "critical");
   const high = open.filter((i) => i.severity === "high");
@@ -372,9 +405,12 @@ export async function getCommandCentre() {
     criticalCount: critical.length,
     highCount: high.length,
     eventsLastHour: recentEventCount?.count ?? 0,
+    eventThroughput,
+    recentActivity,
     correlatedClusters: incidents.filter((i) => i.isMultiSystem).length,
     automationRate: automationRate(automationAgg?.succeeded ?? 0, automationAgg?.total ?? 0),
     automatedResolutions: automationAgg?.succeeded ?? 0,
+    automationsRunning: automationAgg?.running ?? 0,
     humanEscalations: incidents.filter((i) => i.status === "assigned" || i.status === "investigating").length,
     mtta: mtt.mttaMinutes,
     mttr: mtt.mttrMinutes,
@@ -435,4 +471,255 @@ export async function getNotifications() {
   if (demoMode()) return [...demo().notifications].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 10);
   await ready();
   return db.select().from(schema.notifications).orderBy(desc(schema.notifications.at)).limit(10);
+}
+
+// --- Change intelligence -----------------------------------------------------
+async function changeInputs(): Promise<{
+  services: { id: string; name: string; slug: string }[];
+  incidents: { id: string; serviceId: string; detectedAt: Date; severity: string; title: string }[];
+}> {
+  if (demoMode()) {
+    const d = demo();
+    return {
+      services: d.services.map((s) => ({ id: s.id, name: s.name, slug: s.slug })),
+      incidents: d.incidents.map((i) => ({ id: i.id, serviceId: i.serviceId, detectedAt: new Date(i.detectedAt), severity: i.severity, title: i.title })),
+    };
+  }
+  await ready();
+  const [services, incidents] = await Promise.all([
+    db.select({ id: schema.services.id, name: schema.services.name, slug: schema.services.slug }).from(schema.services),
+    db.select({ id: schema.incidents.id, serviceId: schema.incidents.serviceId, detectedAt: schema.incidents.detectedAt, severity: schema.incidents.severity, title: schema.incidents.title }).from(schema.incidents),
+  ]);
+  return {
+    services,
+    incidents: incidents.map((i) => ({
+      id: i.id,
+      serviceId: i.serviceId ?? "",
+      detectedAt: i.detectedAt,
+      severity: i.severity ?? "info",
+      title: i.title ?? "Untitled incident",
+    })),
+  };
+}
+
+export async function getChangeIntelligence() {
+  const { services, incidents } = await changeInputs();
+  const now = Date.now();
+  const deployments = generateDeployments(services, incidents, now);
+  const correlations = correlateChanges(
+    deployments,
+    incidents.map((i) => ({ id: i.id, serviceId: i.serviceId, detectedAt: i.detectedAt, severity: i.severity, title: i.title })),
+    30,
+  );
+  const metrics = computeChangeMetrics(deployments, correlations);
+  return { deployments: deployments.slice(0, 25), correlations, metrics, totalServices: services.length };
+}
+
+// --- Operations tape ---------------------------------------------------------
+export interface TapeItem {
+  id: string;
+  at: Date;
+  kind: "event" | "audit" | "change";
+  source: string;
+  text: string;
+  severity?: string;
+  incidentId?: string | null;
+}
+
+export async function getOperationsTape(limit = 20): Promise<TapeItem[]> {
+  const items: TapeItem[] = [];
+
+  if (demoMode()) {
+    const d = demo();
+    for (const e of d.events) items.push({ id: `e-${e.id}`, at: new Date(e.occurredAt), kind: "event", source: e.source, text: e.message, severity: e.severity, incidentId: e.incidentId ?? null });
+    for (const a of d.auditEvents) items.push({ id: `a-${a.id}`, at: new Date(a.at), kind: "audit", source: a.actor, text: a.summary, incidentId: a.incidentId ?? null });
+  } else {
+    await ready();
+    const [events, audit] = await Promise.all([
+      db.select({ id: schema.events.id, occurredAt: schema.events.occurredAt, source: schema.events.source, message: schema.events.message, severity: schema.events.severity, incidentId: schema.events.incidentId }).from(schema.events).orderBy(desc(schema.events.occurredAt)).limit(40),
+      db.select({ id: schema.auditEvents.id, at: schema.auditEvents.at, actor: schema.auditEvents.actor, summary: schema.auditEvents.summary, incidentId: schema.auditEvents.incidentId }).from(schema.auditEvents).orderBy(desc(schema.auditEvents.at)).limit(40),
+    ]);
+    for (const e of events) items.push({ id: `e-${e.id}`, at: e.occurredAt, kind: "event", source: e.source, text: e.message, severity: e.severity, incidentId: e.incidentId });
+    for (const a of audit) items.push({ id: `a-${a.id}`, at: a.at, kind: "audit", source: a.actor, text: a.summary, incidentId: a.incidentId });
+  }
+
+  // Fold in the most recent deployments as change lines.
+  const { services, incidents } = await changeInputs();
+  const deployments = generateDeployments(services, incidents, Date.now());
+  for (const dep of deployments.slice(0, 12)) {
+    items.push({ id: `c-${dep.id}`, at: dep.deployedAt, kind: "change", source: dep.system, text: `${dep.serviceName} ${dep.status === "rolled_back" ? "rolled back" : "deployed"} ${dep.commitSha} → ${dep.environment}`, incidentId: null });
+  }
+
+  return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit);
+}
+
+// --- Topology ----------------------------------------------------------------
+export interface TopologyNode {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  healthScore: number;
+  criticality: string;
+  ownerTeam: string;
+  slaResolveMins: number;
+  openIncidents: number;
+  topSeverity: string | null;
+  lastDeployAt: Date | null;
+  lastDeploySystem: string | null;
+}
+export interface TopologyEdge { serviceId: string; dependsOnId: string; kind: string }
+
+export async function getTopology(): Promise<{ nodes: TopologyNode[]; edges: TopologyEdge[] }> {
+  let services: { id: string; name: string; slug: string; status: string; healthScore: number; criticality: string; ownerTeam: string; slaResolveMins: number }[];
+  let deps: { serviceId: string; dependsOnId: string; kind: string }[];
+  let incidents: { id: string; serviceId: string; detectedAt: Date; severity: string; status: string; title: string }[];
+
+  if (demoMode()) {
+    const d = demo();
+    services = d.services.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status, healthScore: s.healthScore, criticality: s.criticality, ownerTeam: s.ownerTeam, slaResolveMins: s.slaResolveMins }));
+    deps = d.serviceDependencies.map((e) => ({ serviceId: e.serviceId, dependsOnId: e.dependsOnId, kind: e.kind }));
+    incidents = d.incidents.map((i) => ({ id: i.id, serviceId: i.serviceId, detectedAt: new Date(i.detectedAt), severity: i.severity, status: i.status, title: i.title }));
+  } else {
+    await ready();
+    const [svc, dep, inc] = await Promise.all([
+      db.select({ id: schema.services.id, name: schema.services.name, slug: schema.services.slug, status: schema.services.status, healthScore: schema.services.healthScore, criticality: schema.services.criticality, ownerTeam: schema.services.ownerTeam, slaResolveMins: schema.services.slaResolveMins }).from(schema.services),
+      db.select({ serviceId: schema.serviceDependencies.serviceId, dependsOnId: schema.serviceDependencies.dependsOnId, kind: schema.serviceDependencies.kind }).from(schema.serviceDependencies),
+      db.select({ id: schema.incidents.id, serviceId: schema.incidents.serviceId, detectedAt: schema.incidents.detectedAt, severity: schema.incidents.severity, status: schema.incidents.status, title: schema.incidents.title }).from(schema.incidents),
+    ]);
+    services = svc;
+    deps = dep;
+    incidents = inc.map((i) => ({ id: i.id, serviceId: i.serviceId ?? "", detectedAt: i.detectedAt, severity: i.severity ?? "info", status: i.status ?? "detected", title: i.title ?? "" }));
+  }
+
+  const open = incidents.filter((i) => OPEN_INCIDENT_STATUSES.includes(i.status as IncidentStatus));
+  const openByService = new Map<string, { count: number; top: string | null }>();
+  for (const i of open) {
+    const cur = openByService.get(i.serviceId) ?? { count: 0, top: null };
+    cur.count += 1;
+    if (!cur.top || SEVERITY_RANK[i.severity as Severity] > SEVERITY_RANK[cur.top as Severity]) cur.top = i.severity;
+    openByService.set(i.serviceId, cur);
+  }
+
+  const deployments = generateDeployments(services, incidents, Date.now());
+  const latestDeploy = new Map<string, { at: Date; system: string }>();
+  for (const dpl of deployments) {
+    if (!latestDeploy.has(dpl.serviceId)) latestDeploy.set(dpl.serviceId, { at: dpl.deployedAt, system: dpl.system });
+  }
+
+  const nodes: TopologyNode[] = services.map((s) => {
+    const o = openByService.get(s.id);
+    const dpl = latestDeploy.get(s.id);
+    return {
+      id: s.id, name: s.name, slug: s.slug, status: s.status, healthScore: s.healthScore,
+      criticality: s.criticality, ownerTeam: s.ownerTeam, slaResolveMins: s.slaResolveMins,
+      openIncidents: o?.count ?? 0, topSeverity: o?.top ?? null,
+      lastDeployAt: dpl?.at ?? null, lastDeploySystem: dpl?.system ?? null,
+    };
+  });
+
+  return { nodes, edges: deps };
+}
+
+// --- Runbook centre ----------------------------------------------------------
+const RISK_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+interface RunbookLike {
+  id: string; name: string; slug: string; purpose: string; risk: string; category: string;
+  approvalRequired: boolean; expectedOutcome: string; rollbackConcept: string;
+  syntheticSuccessRate: number; executionCount: number; lastExecutedAt: Date | null;
+}
+
+function assembleRunbooks(
+  runbooks: RunbookLike[],
+  steps: { runbookId: string | null }[],
+  execs: { runbookId: string | null; status: string }[],
+) {
+  const stepCount = new Map<string, number>();
+  for (const s of steps) if (s.runbookId) stepCount.set(s.runbookId, (stepCount.get(s.runbookId) ?? 0) + 1);
+  const execByRb = new Map<string, { total: number; succeeded: number }>();
+  for (const e of execs) {
+    if (!e.runbookId) continue;
+    const c = execByRb.get(e.runbookId) ?? { total: 0, succeeded: 0 };
+    c.total += 1;
+    if (e.status === "succeeded") c.succeeded += 1;
+    execByRb.set(e.runbookId, c);
+  }
+  const rows = runbooks.map((r) => ({
+    ...r,
+    stepCount: stepCount.get(r.id) ?? 0,
+    liveExecutions: execByRb.get(r.id)?.total ?? 0,
+    liveSucceeded: execByRb.get(r.id)?.succeeded ?? 0,
+  }));
+  rows.sort((a, b) => (RISK_RANK[b.risk] ?? 0) - (RISK_RANK[a.risk] ?? 0) || b.liveExecutions - a.liveExecutions);
+  const summary = {
+    total: rows.length,
+    requireApproval: rows.filter((r) => r.approvalRequired).length,
+    highRisk: rows.filter((r) => r.risk === "high").length,
+    totalExecutions: rows.reduce((a, r) => a + r.liveExecutions, 0),
+    avgSuccess: rows.length ? Math.round(rows.reduce((a, r) => a + r.syntheticSuccessRate, 0) / rows.length) : 0,
+  };
+  return { runbooks: rows, summary };
+}
+
+export async function getRunbookCentre() {
+  if (demoMode()) {
+    const d = demo();
+    return assembleRunbooks(d.runbooks as RunbookLike[], d.runbookSteps, d.automationExecutions);
+  }
+  await ready();
+  const [runbooks, steps, execs] = await Promise.all([
+    db.select().from(schema.runbooks),
+    db.select({ runbookId: schema.runbookSteps.runbookId }).from(schema.runbookSteps),
+    db.select({ runbookId: schema.automationExecutions.runbookId, status: schema.automationExecutions.status }).from(schema.automationExecutions),
+  ]);
+  return assembleRunbooks(runbooks as RunbookLike[], steps, execs);
+}
+
+// --- ChatOps workflow --------------------------------------------------------
+export interface ChatMessage { id: string; at: Date; actor: string; action: string; text: string }
+export interface ChatOpsWorkflow {
+  incidentId: string;
+  title: string;
+  severity: string;
+  service: string;
+  channel: string;
+  messages: ChatMessage[];
+}
+
+export async function getChatOpsWorkflow(incidentId?: string): Promise<ChatOpsWorkflow | null> {
+  let data = incidentId ? await getIncidentById(incidentId) : await getIncidentById(DEMO_INCIDENT_ID);
+  if (!data) {
+    const { incidents } = await getIncidents({ open: true });
+    const first = incidents[0];
+    if (!first) return null;
+    data = await getIncidentById(first.id);
+  }
+  if (!data) return null;
+  const { incident, audit, nameById } = data;
+  const service = nameById.get(incident.serviceId)?.name ?? incident.serviceId;
+  const messages: ChatMessage[] = [...audit]
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    .map((a) => ({ id: a.id, at: new Date(a.at), actor: a.actor, action: a.action, text: a.summary }));
+  const shortId = incident.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return {
+    incidentId: incident.id,
+    title: incident.title ?? "Incident",
+    severity: incident.severity ?? "info",
+    service,
+    channel: `#inc-${shortId}`,
+    messages,
+  };
+}
+
+// --- Incident change context -------------------------------------------------
+export async function getIncidentChangeContext(id: string) {
+  const { services, incidents } = await changeInputs();
+  const inc = incidents.find((i) => i.id === id);
+  if (!inc) return { deployments: [] as ReturnType<typeof generateDeployments>, detectedAt: null as Date | null };
+  const windowMs = 120 * 60000;
+  const deployments = generateDeployments(services, incidents, Date.now())
+    .filter((d) => d.serviceId === inc.serviceId && d.deployedAt.getTime() <= inc.detectedAt.getTime() && inc.detectedAt.getTime() - d.deployedAt.getTime() <= windowMs)
+    .sort((a, b) => b.deployedAt.getTime() - a.deployedAt.getTime());
+  return { deployments, detectedAt: inc.detectedAt };
 }

@@ -177,6 +177,49 @@ export function ConfidenceBar({ value, label = "Confidence" }: { value: number; 
   );
 }
 
+/** Dense, server-rendered throughput bar strip. `values` read left(old)→right(new). */
+export function Sparkbars({
+  values,
+  ariaLabel,
+  height = 40,
+}: {
+  values: number[];
+  ariaLabel: string;
+  height?: number;
+}) {
+  const max = Math.max(1, ...values);
+  const n = Math.max(1, values.length);
+  const gap = 2;
+  const barW = (100 - gap * (n - 1)) / n;
+  const last = values.length - 1;
+  return (
+    <svg
+      role="img"
+      aria-label={ariaLabel}
+      viewBox={`0 0 100 ${height}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height }}
+    >
+      {values.map((v, i) => {
+        const h = Math.max(1.5, (v / max) * (height - 2));
+        const x = i * (barW + gap);
+        return (
+          <rect
+            key={i}
+            x={x}
+            y={height - h}
+            width={barW}
+            height={h}
+            rx={0.6}
+            className={i === last ? "fill-teal-400" : "fill-teal-500/35"}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 // --- Page header -------------------------------------------------------------
 export function PageHeader({
   title,

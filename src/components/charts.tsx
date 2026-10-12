@@ -15,19 +15,21 @@ import {
   Legend,
 } from "recharts";
 
-const AXIS = { stroke: "#64748b", fontSize: 11 };
-const GRID = "#1e293b";
+const AXIS = { stroke: "#8b94b8", fontSize: 11 };
+const GRID = "#1e2540";
+const ACCENT = "#2dd4e8";
+const ACCENT_2 = "#9d93ff";
 const TOOLTIP_STYLE = {
-  backgroundColor: "#0d1526",
-  border: "1px solid rgba(148,163,184,0.2)",
-  borderRadius: 8,
-  color: "#e2e8f0",
+  backgroundColor: "#151a2b",
+  border: "1px solid rgba(146,157,200,0.24)",
+  borderRadius: 10,
+  color: "#e8ebf7",
   fontSize: 12,
 };
 
 export function HorizontalBar({
   data,
-  color = "#2dd4bf",
+  color = ACCENT,
   ariaLabel,
 }: {
   data: { label: string; value: number }[];
@@ -51,7 +53,7 @@ export function HorizontalBar({
 
 export function VerticalBar({
   data,
-  color = "#38bdf8",
+  color = ACCENT,
   ariaLabel,
 }: {
   data: { label: string; value: number }[];
@@ -86,16 +88,16 @@ export function TrendArea({
         <AreaChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
           <defs>
             <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.4} />
-              <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0} />
+              <stop offset="0%" stopColor="#2dd4e8" stopOpacity={0.4} />
+              <stop offset="100%" stopColor="#2dd4e8" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
           <XAxis dataKey="label" {...AXIS} />
           <YAxis {...AXIS} allowDecimals={false} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
-          <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#fill)" />
-          <Area type="monotone" dataKey="forecast" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 4" fill="none" />
+          <Area type="monotone" dataKey="value" stroke="#2dd4e8" strokeWidth={2} fill="url(#fill)" />
+          <Area type="monotone" dataKey="forecast" stroke="#9d93ff" strokeWidth={2} strokeDasharray="5 4" fill="none" />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -118,8 +120,8 @@ export function ManualVsAutomated({
           <YAxis {...AXIS} allowDecimals={false} />
           <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
           <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
-          <Bar dataKey="manual" stackId="a" fill="#fb923c" name="Manual" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="automated" stackId="a" fill="#2dd4bf" name="Automated" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="manual" stackId="a" fill="#ff9a4d" name="Manual" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="automated" stackId="a" fill="#2dd4e8" name="Automated" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -129,7 +131,7 @@ export function ManualVsAutomated({
 export function MetricLine({
   data,
   dataKey,
-  color = "#38bdf8",
+  color = ACCENT,
   ariaLabel,
 }: {
   data: Record<string, number | string>[];
