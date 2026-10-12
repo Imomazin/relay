@@ -350,6 +350,7 @@ export async function getCommandCentre() {
   const [automationAgg] = await db.select({
     total: sql<number>`count(*)::int`,
     succeeded: sql<number>`sum(case when ${schema.automationExecutions.status} = 'succeeded' then 1 else 0 end)::int`,
+    running: sql<number>`sum(case when ${schema.automationExecutions.status} in ('proposed','awaiting_approval','running') then 1 else 0 end)::int`,
   }).from(schema.automationExecutions);
 
   // Event throughput: normalised events per hour over the last 12 hours, as a
@@ -409,6 +410,7 @@ export async function getCommandCentre() {
     correlatedClusters: incidents.filter((i) => i.isMultiSystem).length,
     automationRate: automationRate(automationAgg?.succeeded ?? 0, automationAgg?.total ?? 0),
     automatedResolutions: automationAgg?.succeeded ?? 0,
+    automationsRunning: automationAgg?.running ?? 0,
     humanEscalations: incidents.filter((i) => i.status === "assigned" || i.status === "investigating").length,
     mtta: mtt.mttaMinutes,
     mttr: mtt.mttrMinutes,
@@ -617,6 +619,97 @@ export async function getTopology(): Promise<{ nodes: TopologyNode[]; edges: Top
   });
 
   return { nodes, edges: deps };
+}
+
+// --- Runbook centre ----------------------------------------------------------
+const RISK_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+interface RunbookLike {
+  id: string; name: string; slug: string; purpose: string; risk: string; category: string;
+  approvalRequired: boolean; expectedOutcome: string; rollbackConcept: string;
+  syntheticSuccessRate: number; executionCount: number; lastExecutedAt: Date | null;
+}
+
+function assembleRunbooks(
+  runbooks: RunbookLike[],
+  steps: { runbookId: string | null }[],
+  execs: { runbookId: string | null; status: string }[],
+) {
+  const stepCount = new Map<string, number>();
+  for (const s of steps) if (s.runbookId) stepCount.set(s.runbookId, (stepCount.get(s.runbookId) ?? 0) + 1);
+  const execByRb = new Map<string, { total: number; succeeded: number }>();
+  for (const e of execs) {
+    if (!e.runbookId) continue;
+    const c = execByRb.get(e.runbookId) ?? { total: 0, succeeded: 0 };
+    c.total += 1;
+    if (e.status === "succeeded") c.succeeded += 1;
+    execByRb.set(e.runbookId, c);
+  }
+  const rows = runbooks.map((r) => ({
+    ...r,
+    stepCount: stepCount.get(r.id) ?? 0,
+    liveExecutions: execByRb.get(r.id)?.total ?? 0,
+    liveSucceeded: execByRb.get(r.id)?.succeeded ?? 0,
+  }));
+  rows.sort((a, b) => (RISK_RANK[b.risk] ?? 0) - (RISK_RANK[a.risk] ?? 0) || b.liveExecutions - a.liveExecutions);
+  const summary = {
+    total: rows.length,
+    requireApproval: rows.filter((r) => r.approvalRequired).length,
+    highRisk: rows.filter((r) => r.risk === "high").length,
+    totalExecutions: rows.reduce((a, r) => a + r.liveExecutions, 0),
+    avgSuccess: rows.length ? Math.round(rows.reduce((a, r) => a + r.syntheticSuccessRate, 0) / rows.length) : 0,
+  };
+  return { runbooks: rows, summary };
+}
+
+export async function getRunbookCentre() {
+  if (demoMode()) {
+    const d = demo();
+    return assembleRunbooks(d.runbooks as RunbookLike[], d.runbookSteps, d.automationExecutions);
+  }
+  await ready();
+  const [runbooks, steps, execs] = await Promise.all([
+    db.select().from(schema.runbooks),
+    db.select({ runbookId: schema.runbookSteps.runbookId }).from(schema.runbookSteps),
+    db.select({ runbookId: schema.automationExecutions.runbookId, status: schema.automationExecutions.status }).from(schema.automationExecutions),
+  ]);
+  return assembleRunbooks(runbooks as RunbookLike[], steps, execs);
+}
+
+// --- ChatOps workflow --------------------------------------------------------
+export interface ChatMessage { id: string; at: Date; actor: string; action: string; text: string }
+export interface ChatOpsWorkflow {
+  incidentId: string;
+  title: string;
+  severity: string;
+  service: string;
+  channel: string;
+  messages: ChatMessage[];
+}
+
+export async function getChatOpsWorkflow(incidentId?: string): Promise<ChatOpsWorkflow | null> {
+  let data = incidentId ? await getIncidentById(incidentId) : await getIncidentById(DEMO_INCIDENT_ID);
+  if (!data) {
+    const { incidents } = await getIncidents({ open: true });
+    const first = incidents[0];
+    if (!first) return null;
+    data = await getIncidentById(first.id);
+  }
+  if (!data) return null;
+  const { incident, audit, nameById } = data;
+  const service = nameById.get(incident.serviceId)?.name ?? incident.serviceId;
+  const messages: ChatMessage[] = [...audit]
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    .map((a) => ({ id: a.id, at: new Date(a.at), actor: a.actor, action: a.action, text: a.summary }));
+  const shortId = incident.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return {
+    incidentId: incident.id,
+    title: incident.title ?? "Incident",
+    severity: incident.severity ?? "info",
+    service,
+    channel: `#inc-${shortId}`,
+    messages,
+  };
 }
 
 // --- Incident change context -------------------------------------------------

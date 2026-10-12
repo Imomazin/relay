@@ -24,12 +24,14 @@ export default async function CommandCentre() {
   const [m, queue, tape] = await Promise.all([getCommandCentre(), getQueue(), getOperationsTape(22)]);
   const awaitingApproval = m.topOpenIncidents.filter((i) => i.status === "awaiting_approval").length;
 
+  const degradedServices = (m.statusCounts.down ?? 0) + (m.statusCounts.impaired ?? 0) + (m.statusCounts.degraded ?? 0);
   const attention = [
-    { label: "Critical incidents", value: m.criticalCount, tone: "critical", href: "/queue?severity=critical" },
-    { label: "SLA breached", value: queue.summary.breached, tone: "critical", href: "/queue?sla=breached" },
-    { label: "Approaching SLA", value: queue.summary.atRisk, tone: "warn", href: "/queue?sla=at_risk" },
+    { label: "P1 · Critical", value: m.criticalCount, tone: "critical", href: "/queue?severity=critical" },
+    { label: "P2 · High", value: m.highCount, tone: "warn", href: "/queue?severity=high" },
+    { label: "Degraded services", value: degradedServices, tone: "warn", href: "/services" },
+    { label: "SLA at risk", value: queue.summary.breached + queue.summary.atRisk, tone: "critical", href: "/queue?sla=at_risk" },
     { label: "Awaiting approval", value: awaitingApproval, tone: "accent", href: "/incidents?status=awaiting_approval" },
-    { label: "Unassigned", value: queue.summary.unassigned, tone: "warn", href: "/queue" },
+    { label: "Automations running", value: m.automationsRunning, tone: "accent", href: "/automations" },
   ] as const;
 
   return (
@@ -42,8 +44,9 @@ export default async function CommandCentre() {
         }
       />
 
-      {/* Attention strip */}
-      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-[var(--line)] sm:grid-cols-3 lg:grid-cols-5" style={{ borderColor: "var(--line)" }}>
+      {/* Global health rail */}
+      <h2 className="eyebrow mb-2">Global operational posture</h2>
+      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-[var(--line)] sm:grid-cols-3 lg:grid-cols-6" style={{ borderColor: "var(--line)" }}>
         {attention.map((a) => (
           <Link key={a.label} href={a.href} className="group bg-[var(--surface)] p-4 transition-colors hover:bg-white/[0.03]">
             <div className="flex items-baseline justify-between">

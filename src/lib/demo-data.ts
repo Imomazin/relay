@@ -97,6 +97,7 @@ export function getDemoCommandCentre() {
 
   const succeeded = seed.automationExecutions.filter((a) => a.status === "succeeded").length;
   const automationTotal = seed.automationExecutions.length;
+  const automationsRunning = seed.automationExecutions.filter((a) => ["proposed", "awaiting_approval", "running"].includes(a.status)).length;
 
   const throughputByHour = new Map<number, number>();
   for (const event of seed.events) {
@@ -124,6 +125,7 @@ export function getDemoCommandCentre() {
     correlatedClusters: incidents.filter((incident) => incident.isMultiSystem).length,
     automationRate: automationTotal ? Math.round((succeeded / automationTotal) * 100) : 0,
     automatedResolutions: succeeded,
+    automationsRunning,
     humanEscalations: incidents.filter((incident) => incident.status === "assigned" || incident.status === "investigating").length,
     mtta: average(ackMinutes),
     mttr: average(resolveMinutes),
