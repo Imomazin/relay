@@ -90,7 +90,7 @@ export function TopologyGraph({ nodes, edges }: { nodes: TopologyNode[]; edges: 
               const mx = (x1 + x2) / 2;
               return (
                 <path key={i} d={`M ${x1} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${x2} ${b.y}`} fill="none"
-                  stroke={e.kind === "hard" ? "#2fd9f2" : "#5b6484"} strokeWidth={e.kind === "hard" ? 1.8 : 1.2}
+                  stroke={e.kind === "hard" ? "#2dd4e8" : "#5b6484"} strokeWidth={e.kind === "hard" ? 1.8 : 1.2}
                   strokeDasharray={e.kind === "hard" ? undefined : "4 3"} opacity={faded ? 0.07 : 0.45} />
               );
             })}
@@ -103,7 +103,7 @@ export function TopologyGraph({ nodes, edges }: { nodes: TopologyNode[]; edges: 
               return (
                 <g key={s.id} transform={`translate(${p.x - NODE_W / 2}, ${p.y - NODE_H / 2})`} opacity={faded ? 0.2 : 1}
                   onMouseEnter={() => setSel(s.id)} onClick={() => setSel(s.id)} style={{ cursor: "pointer" }}>
-                  <rect width={NODE_W} height={NODE_H} rx={6} fill="#14132a" stroke={isSel ? "#2fd9f2" : "rgba(139,147,181,0.25)"} strokeWidth={isSel ? 1.8 : 1} />
+                  <rect width={NODE_W} height={NODE_H} rx={6} fill="#151a2b" stroke={isSel ? "#2dd4e8" : "rgba(146,157,200,0.25)"} strokeWidth={isSel ? 1.8 : 1} />
                   <circle cx={16} cy={NODE_H / 2} r={5} fill={STATUS_FILL[s.status] ?? "#8b93b5"} />
                   <text x={30} y={NODE_H / 2 - 2} fontSize={12} fill="#e7ecff" fontWeight={500}>
                     {s.name.length > 20 ? s.name.slice(0, 19) + "…" : s.name}

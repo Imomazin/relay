@@ -60,7 +60,7 @@ export default async function CapacityPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SectionTitle>Services generating greatest effort</SectionTitle>
-          <Card><CardBody><HorizontalBar data={topEffort.map((t) => ({ label: t.service, value: t.count }))} color="#fb923c" ariaLabel="Incident effort by service" /></CardBody></Card>
+          <Card><CardBody><HorizontalBar data={topEffort.map((t) => ({ label: t.service, value: t.count }))} color="#ff9a4d" ariaLabel="Incident effort by service" /></CardBody></Card>
         </div>
         <div className="space-y-3">
           <StatTile label="Latest weekly workload" value={`${latestActual?.supportWorkloadHours ?? 0}h`} />
@@ -111,7 +111,7 @@ export default async function CapacityPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card><CardBody>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Incident volume by service</p>
-            <HorizontalBar data={analytics.incidentsByService} color="#2dd4bf" ariaLabel="Incident volume by service" />
+            <HorizontalBar data={analytics.incidentsByService} color="#2dd4e8" ariaLabel="Incident volume by service" />
           </CardBody></Card>
           <Card><CardBody>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Events by source</p>
@@ -119,11 +119,11 @@ export default async function CapacityPage() {
           </CardBody></Card>
           <Card><CardBody>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Recurring incident categories</p>
-            <VerticalBar data={analytics.incidentsByCategory.map((d) => ({ label: titleCase(d.label), value: d.value }))} color="#a78bfa" ariaLabel="Recurring incident categories" />
+            <VerticalBar data={analytics.incidentsByCategory.map((d) => ({ label: titleCase(d.label), value: d.value }))} color="#9d93ff" ariaLabel="Recurring incident categories" />
           </CardBody></Card>
           <Card><CardBody>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Incidents by severity</p>
-            <VerticalBar data={analytics.incidentsBySeverity.map((d) => ({ label: titleCase(d.label), value: d.value }))} color="#fb923c" ariaLabel="Incidents by severity" />
+            <VerticalBar data={analytics.incidentsBySeverity.map((d) => ({ label: titleCase(d.label), value: d.value }))} color="#ff9a4d" ariaLabel="Incidents by severity" />
           </CardBody></Card>
         </div>
       </div>

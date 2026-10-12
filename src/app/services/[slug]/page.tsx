@@ -56,7 +56,7 @@ export default async function ServiceDetail({ params }: { params: Promise<{ slug
         <div className="lg:col-span-2 space-y-6">
           <div>
             <SectionTitle hint="last 24 samples">Health trend</SectionTitle>
-            <Card><CardBody><MetricLine data={chartData} dataKey="health" color="#2dd4bf" ariaLabel={`Health trend for ${service.name}`} /></CardBody></Card>
+            <Card><CardBody><MetricLine data={chartData} dataKey="health" color="#2dd4e8" ariaLabel={`Health trend for ${service.name}`} /></CardBody></Card>
           </div>
 
           <div>

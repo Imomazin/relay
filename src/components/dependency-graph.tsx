@@ -17,10 +17,10 @@ export interface GraphEdge {
 }
 
 const STATUS_FILL: Record<string, string> = {
-  healthy: "#34d399",
-  degraded: "#facc15",
-  impaired: "#fb923c",
-  down: "#f43f5e",
+  healthy: "#2ee6b6",
+  degraded: "#f6c955",
+  impaired: "#ff9a4d",
+  down: "#fb5469",
 };
 
 const TIERS = ["tier1", "tier2", "tier3"] as const;
@@ -73,7 +73,7 @@ export function DependencyGraph({ services, edges }: { services: GraphService[];
         <svg viewBox={`0 0 940 ${height}`} className="w-full min-w-[720px]" style={{ height }}>
           {/* Column headers */}
           {TIERS.map((t) => (
-            <text key={t} x={COL_X[t]} y={28} textAnchor="middle" fontSize={12} fill="#64748b" fontWeight={600}>
+            <text key={t} x={COL_X[t]} y={28} textAnchor="middle" fontSize={12} fill="#5b6484" fontWeight={600}>
               {TIER_LABEL[t]}
             </text>
           ))}
@@ -92,7 +92,7 @@ export function DependencyGraph({ services, edges }: { services: GraphService[];
                 key={i}
                 d={`M ${x1} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${x2} ${b.y}`}
                 fill="none"
-                stroke={e.kind === "hard" ? "#2dd4bf" : "#64748b"}
+                stroke={e.kind === "hard" ? "#2dd4e8" : "#5b6484"}
                 strokeWidth={e.kind === "hard" ? 1.8 : 1.2}
                 strokeDasharray={e.kind === "hard" ? undefined : "4 3"}
                 opacity={faded ? 0.08 : 0.5}
@@ -115,7 +115,7 @@ export function DependencyGraph({ services, edges }: { services: GraphService[];
                 style={{ cursor: "pointer" }}
               >
                 <a href={`/services/${s.slug}`}>
-                  <rect width={NODE_W} height={NODE_H} rx={8} fill="#0d1526" stroke="rgba(148,163,184,0.25)" />
+                  <rect width={NODE_W} height={NODE_H} rx={8} fill="#151a2b" stroke="rgba(146,157,200,0.25)" />
                   <circle cx={16} cy={NODE_H / 2} r={5} fill={STATUS_FILL[s.status] ?? "#94a3b8"} />
                   <text x={30} y={NODE_H / 2 + 4} fontSize={12} fill="#e2e8f0" fontWeight={500}>
                     {s.name.length > 20 ? s.name.slice(0, 19) + "…" : s.name}
@@ -133,7 +133,7 @@ export function DependencyGraph({ services, edges }: { services: GraphService[];
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS_FILL.degraded }} /> degraded</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS_FILL.impaired }} /> impaired</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS_FILL.down }} /> down</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4" style={{ background: "#2dd4bf" }} /> hard dependency</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4" style={{ background: "#2dd4e8" }} /> hard dependency</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-500" /> soft dependency</span>
       </div>
       <ul className="sr-only">
